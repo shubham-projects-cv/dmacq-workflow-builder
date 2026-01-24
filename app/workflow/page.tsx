@@ -1,6 +1,6 @@
-'use client';
+"use client";
 
-import React, { useCallback } from 'react';
+import React, { useCallback } from "react";
 import ReactFlow, {
   Controls,
   Background,
@@ -10,14 +10,17 @@ import ReactFlow, {
   Connection,
   Edge,
   Node,
-} from 'reactflow';
+} from "reactflow";
+
+import WorkflowLayout from "@/components/WorkflowLayout";
+import Sidebar from "@/components/Sidebar";
 
 const initialNodes: Node[] = [
   {
-    id: '1',
-    type: 'default',
+    id: "1",
+    type: "default",
     position: { x: 250, y: 100 },
-    data: { label: 'Start' },
+    data: { label: "Start" },
   },
 ];
 
@@ -31,11 +34,11 @@ export default function WorkflowPage() {
     (params: Connection) => {
       setEdges((eds) => addEdge(params, eds));
     },
-    [setEdges]
+    [setEdges],
   );
 
   return (
-    <div className="h-screen w-screen">
+    <WorkflowLayout sidebar={<Sidebar />}>
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -47,6 +50,6 @@ export default function WorkflowPage() {
         <Controls />
         <Background />
       </ReactFlow>
-    </div>
+    </WorkflowLayout>
   );
 }
