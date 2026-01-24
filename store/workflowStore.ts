@@ -8,14 +8,27 @@ import {
   applyEdgeChanges,
 } from "reactflow";
 
+type Position = {
+  x: number;
+  y: number;
+};
+
 type WorkflowState = {
   nodes: Node[];
   edges: Edge[];
 
+  selectedNodeId: string | null;
+  isLeftOpen: boolean;
+
   onNodesChange: (changes: NodeChange[]) => void;
   onEdgesChange: (changes: EdgeChange[]) => void;
 
-  addNode: (type: string, position?: { x: number; y: number }) => void;
+  selectNode: (id: string | null) => void;
+
+  toggleLeft: () => void;
+  closeLeft: () => void;
+
+  addNode: (type: string, position?: Position) => void;
   addEdge: (edge: Edge) => void;
 };
 
@@ -31,6 +44,9 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
 
   edges: [],
 
+  selectedNodeId: null,
+  isLeftOpen: true,
+
   onNodesChange: (changes) => {
     set({
       nodes: applyNodeChanges(changes, get().nodes),
@@ -43,11 +59,23 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     });
   },
 
-  addNode: (type, position?: { x: number; y: number }) => {
+  selectNode: (id) => {
+    set({ selectedNodeId: id });
+  },
+
+  toggleLeft: () => {
+    set({ isLeftOpen: !get().isLeftOpen });
+  },
+
+  closeLeft: () => {
+    set({ isLeftOpen: false });
+  },
+
+  addNode: (type, position) => {
     const newNode: Node = {
       id: crypto.randomUUID(),
       type: "default",
-      position: position || { x: 0, y: 0 },
+      position: position ?? { x: 0, y: 0 },
       data: { label: type },
     };
 
