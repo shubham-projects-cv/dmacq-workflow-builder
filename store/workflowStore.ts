@@ -13,8 +13,14 @@ type Position = {
   y: number;
 };
 
+type NodeData = {
+  label?: string;
+  email?: string;
+  approver?: string;
+};
+
 type WorkflowState = {
-  nodes: Node[];
+  nodes: Node<NodeData>[];
   edges: Edge[];
 
   selectedNodeId: string | null;
@@ -30,6 +36,8 @@ type WorkflowState = {
 
   addNode: (type: string, position?: Position) => void;
   addEdge: (edge: Edge) => void;
+
+  updateNodeData: (id: string, data: Partial<NodeData>) => void;
 };
 
 export const useWorkflowStore = create<WorkflowState>((set, get) => ({
@@ -47,6 +55,8 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   selectedNodeId: null,
   isLeftOpen: true,
 
+  /* ReactFlow handlers */
+
   onNodesChange: (changes) => {
     set({
       nodes: applyNodeChanges(changes, get().nodes),
@@ -58,6 +68,8 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       edges: applyEdgeChanges(changes, get().edges),
     });
   },
+
+  /* UI state */
 
   selectNode: (id) => {
     set({ selectedNodeId: id });
@@ -71,12 +83,16 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     set({ isLeftOpen: false });
   },
 
+  /* Workflow actions */
+
   addNode: (type, position) => {
-    const newNode: Node = {
+    const newNode: Node<NodeData> = {
       id: crypto.randomUUID(),
       type: "default",
       position: position ?? { x: 0, y: 0 },
-      data: { label: type },
+      data: {
+        label: type,
+      },
     };
 
     set({
@@ -87,6 +103,22 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   addEdge: (edge) => {
     set({
       edges: [...get().edges, edge],
+    });
+  },
+
+  updateNodeData: (id, data) => {
+    set({
+      nodes: get().nodes.map((node) =>
+        node.id === id
+          ? {
+              ...node,
+              data: {
+                ...node.data,
+                ...data,
+              },
+            }
+          : node,
+      ),
     });
   },
 }));
