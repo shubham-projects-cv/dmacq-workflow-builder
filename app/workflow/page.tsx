@@ -4,52 +4,48 @@ import React, { useCallback } from "react";
 import ReactFlow, {
   Controls,
   Background,
-  useNodesState,
-  useEdgesState,
   addEdge,
   Connection,
-  Edge,
-  Node,
+  ReactFlowProvider,
 } from "reactflow";
 
 import WorkflowLayout from "@/components/WorkflowLayout";
 import Sidebar from "@/components/Sidebar";
-
-const initialNodes: Node[] = [
-  {
-    id: "1",
-    type: "default",
-    position: { x: 250, y: 100 },
-    data: { label: "Start" },
-  },
-];
-
-const initialEdges: Edge[] = [];
+import { useWorkflowStore } from "@/store/workflowStore";
 
 export default function WorkflowPage() {
-  const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
-  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
+  const nodes = useWorkflowStore((s) => s.nodes);
+  const edges = useWorkflowStore((s) => s.edges);
+
+  const onNodesChange = useWorkflowStore((s) => s.onNodesChange);
+  const onEdgesChange = useWorkflowStore((s) => s.onEdgesChange);
+  const addStoreEdge = useWorkflowStore((s) => s.addEdge);
 
   const onConnect = useCallback(
     (params: Connection) => {
-      setEdges((eds) => addEdge(params, eds));
+      const edge = addEdge(params, []);
+      if (edge.length > 0) {
+        addStoreEdge(edge[0]);
+      }
     },
-    [setEdges],
+    [addStoreEdge],
   );
 
   return (
-    <WorkflowLayout sidebar={<Sidebar />}>
-      <ReactFlow
-        nodes={nodes}
-        edges={edges}
-        onNodesChange={onNodesChange}
-        onEdgesChange={onEdgesChange}
-        onConnect={onConnect}
-        fitView
-      >
-        <Controls />
-        <Background />
-      </ReactFlow>
-    </WorkflowLayout>
+    <ReactFlowProvider>
+      <WorkflowLayout sidebar={<Sidebar />}>
+        <ReactFlow
+          nodes={nodes}
+          edges={edges}
+          onNodesChange={onNodesChange}
+          onEdgesChange={onEdgesChange}
+          onConnect={onConnect}
+          fitView
+        >
+          <Controls />
+          <Background />
+        </ReactFlow>
+      </WorkflowLayout>
+    </ReactFlowProvider>
   );
 }
