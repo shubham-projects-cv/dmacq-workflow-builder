@@ -76,9 +76,9 @@ export default function Sidebar() {
   };
 
   return (
-    <div className="h-full flex flex-col bg-white text-gray-900 opacity-100">
+    <div className="h-full flex flex-col bg-white text-gray-900 opacity-100 p-4">
       {/* ================= HEADER ================= */}
-      <div className="p-4 border-b flex items-center justify-between">
+      <div className="border-b flex items-center justify-between mb-5 pb-3">
         <h2 className="font-semibold text-lg">Nodes</h2>
 
         <button onClick={closeLeft}>
@@ -87,7 +87,7 @@ export default function Sidebar() {
       </div>
 
       {/* ================= LIST ================= */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-3">
+      <div className="flex-1 overflow-y-auto space-y-3">
         {["Start", "Approval", "End"].map((type) => (
           <div
             key={type}
@@ -102,7 +102,7 @@ export default function Sidebar() {
       </div>
 
       {/* ================= FOOTER ================= */}
-      <div className="border-t p-4 space-y-3">
+      <div className="space-y-3">
         <input
           ref={fileRef}
           type="file"

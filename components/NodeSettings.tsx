@@ -1,6 +1,6 @@
 "use client";
 
-import { X } from "lucide-react";
+import { X, Mail, Type, User } from "lucide-react";
 import { ChangeEvent } from "react";
 
 import { useWorkflowStore } from "@/store/workflowStore";
@@ -26,45 +26,58 @@ export default function NodeSettings() {
     };
 
   return (
-    <div className="w-72 bg-white border-l p-4 h-full">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="font-semibold">Node Settings</h3>
+    <div className="h-full bg-white text-gray-900 p-4">
+      {/* ================= HEADER ================= */}
+      <div className="flex items-center justify-between mb-5 border-b pb-3">
+        <h3 className="font-semibold text-lg">Node Settings</h3>
 
         <button onClick={close}>
           <X size={18} />
         </button>
       </div>
 
-      {/* Form */}
+      {/* ================= FORM ================= */}
       <div className="space-y-4 text-sm">
+        {/* LABEL */}
         <div>
-          <label className="block mb-1 font-medium">Label</label>
+          <label className="flex items-center gap-1 mb-1 font-medium">
+            <Type size={14} />
+            Label
+          </label>
 
           <input
             value={node.data?.label || ""}
             onChange={handleChange("label")}
-            className="w-full border rounded px-2 py-1"
+            className="w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
           />
         </div>
 
+        {/* EMAIL */}
         <div>
-          <label className="block mb-1 font-medium">Email</label>
+          <label className="flex items-center gap-1 mb-1 font-medium">
+            <Mail size={14} />
+            Approval Email
+          </label>
 
           <input
             value={node.data?.email || ""}
             onChange={handleChange("email")}
-            className="w-full border rounded px-2 py-1"
+            placeholder="approver@email.com"
+            className="w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
           />
         </div>
 
+        {/* APPROVER */}
         <div>
-          <label className="block mb-1 font-medium">Approver</label>
+          <label className="flex items-center gap-1 mb-1 font-medium">
+            <User size={14} />
+            Approver Name
+          </label>
 
           <input
             value={node.data?.approver || ""}
             onChange={handleChange("approver")}
-            className="w-full border rounded px-2 py-1"
+            className="w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
           />
         </div>
       </div>
