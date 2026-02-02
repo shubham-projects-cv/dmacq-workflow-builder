@@ -29,7 +29,7 @@ export default function WorkflowLayout({
         <div
           className={`
             absolute left-0 top-0 z-40
-            w-64 h-full
+            w-72 h-full
             bg-white border-r
             transition-transform duration-300
             ${isLeftOpen ? "translate-x-0" : "-translate-x-full"}
