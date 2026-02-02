@@ -129,7 +129,7 @@ export default function Home() {
 ----------------
 "use client";
 
-import React, { useCallback } from "react";
+import React, { useCallback, useRef } from "react";
 
 import ReactFlow, {
   Controls,
@@ -137,6 +137,7 @@ import ReactFlow, {
   addEdge,
   Connection,
   ReactFlowProvider,
+  ReactFlowInstance,
 } from "reactflow";
 
 import StartNode from "@/components/nodes/StartNode";
@@ -159,12 +160,17 @@ export default function WorkflowPage() {
   const onEdgesChange = useWorkflowStore((s) => s.onEdgesChange);
 
   const addStoreEdge = useWorkflowStore((s) => s.addEdge);
+  const addNode = useWorkflowStore((s) => s.addNode);
 
   const selectNode = useWorkflowStore((s) => s.selectNode);
   const selectEdge = useWorkflowStore((s) => s.selectEdge);
 
   const closeSettings = useWorkflowStore((s) => s.closeSettings);
   const settingsId = useWorkflowStore((s) => s.settingsNodeId);
+
+  /* ✅ ReactFlow Instance */
+  const reactFlowWrapper = useRef<HTMLDivElement>(null);
+  const reactFlowInstance = useRef<ReactFlowInstance | null>(null);
 
   const onConnect = useCallback(
     (params: Connection) => {
@@ -173,6 +179,35 @@ export default function WorkflowPage() {
       if (e.length) addStoreEdge(e[0]);
     },
     [addStoreEdge],
+  );
+
+  /* ✅ Allow Drop */
+  const onDragOver = useCallback((event: React.DragEvent) => {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
+  }, []);
+
+  /* ✅ Drop Handler */
+  const onDrop = useCallback(
+    (event: React.DragEvent) => {
+      event.preventDefault();
+
+      const type = event.dataTransfer.getData("application/reactflow");
+
+      if (!type) return;
+
+      if (!reactFlowWrapper.current || !reactFlowInstance.current) return;
+
+      const bounds = reactFlowWrapper.current.getBoundingClientRect();
+
+      const position = reactFlowInstance.current.screenToFlowPosition({
+        x: event.clientX - bounds.left,
+        y: event.clientY - bounds.top,
+      });
+
+      addNode(type, position);
+    },
+    [addNode],
   );
 
   const nodeTypes = {
@@ -196,36 +231,44 @@ export default function WorkflowPage() {
         sidebar={<Sidebar />}
         rightPanel={settingsId ? <NodeSettings /> : null}
       >
-        <ReactFlow
-          nodes={nodes}
-          edges={mappedEdges}
-          nodeTypes={nodeTypes}
-          edgeTypes={edgeTypes}
-          onNodesChange={onNodesChange}
-          onEdgesChange={onEdgesChange}
-          onConnect={onConnect}
-          /* ✅ IMPORTANT */
-          selectNodesOnDrag={false}
-          elementsSelectable={true}
-          onNodeClick={(_, node) => {
-            selectNode(node.id);
-            selectEdge(null);
-          }}
-          onEdgeClick={(_, edge) => {
-            selectEdge(edge.id);
-            selectNode(null);
-            closeSettings();
-          }}
-          onPaneClick={() => {
-            selectNode(null);
-            selectEdge(null);
-            closeSettings();
-          }}
-          fitView
+        {/* ✅ Wrapper Needed for Drop */}
+        <div
+          ref={reactFlowWrapper}
+          className="w-full h-full"
+          onDrop={onDrop}
+          onDragOver={onDragOver}
         >
-          <Controls />
-          <Background />
-        </ReactFlow>
+          <ReactFlow
+            nodes={nodes}
+            edges={mappedEdges}
+            nodeTypes={nodeTypes}
+            edgeTypes={edgeTypes}
+            onNodesChange={onNodesChange}
+            onEdgesChange={onEdgesChange}
+            onConnect={onConnect}
+            onInit={(rf) => (reactFlowInstance.current = rf)}
+            selectNodesOnDrag={false}
+            elementsSelectable
+            onNodeClick={(_, node) => {
+              selectNode(node.id);
+              selectEdge(null);
+            }}
+            onEdgeClick={(_, edge) => {
+              selectEdge(edge.id);
+              selectNode(null);
+              closeSettings();
+            }}
+            onPaneClick={() => {
+              selectNode(null);
+              selectEdge(null);
+              closeSettings();
+            }}
+            fitView
+          >
+            <Controls />
+            <Background />
+          </ReactFlow>
+        </div>
       </WorkflowLayout>
     </ReactFlowProvider>
   );
@@ -538,32 +581,85 @@ export default function NodeSettings() {
 ----------------
 "use client";
 
-import { X } from "lucide-react";
-import { useReactFlow } from "reactflow";
+import { X, Upload, Download } from "lucide-react";
+import { useRef } from "react";
 
 import { useWorkflowStore } from "@/store/workflowStore";
 
 export default function Sidebar() {
-  const addNode = useWorkflowStore((s) => s.addNode);
   const closeLeft = useWorkflowStore((s) => s.closeLeft);
 
-  const { getViewport, getZoom } = useReactFlow();
+  const workflow = useWorkflowStore((s) => s.workflow);
+  const setWorkflow = useWorkflowStore((s) => s.setWorkflow);
+  const addNode = useWorkflowStore((s) => s.addNode);
 
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  /* ================= DRAG ================= */
+  const onDragStart = (
+    event: React.DragEvent<HTMLDivElement>,
+    nodeType: string,
+  ) => {
+    event.dataTransfer.setData("application/reactflow", nodeType);
+    event.dataTransfer.effectAllowed = "move";
+  };
+
+  /* ================= CLICK ADD ================= */
   const handleAdd = (type: string) => {
-    const viewport = getViewport();
-    const zoom = getZoom();
+    // Add to center
+    addNode(type, { x: 200, y: 200 });
+  };
 
-    const x = (-viewport.x + window.innerWidth / 2) / zoom;
+  /* ================= EXPORT ================= */
+  const handleExport = () => {
+    const data = JSON.stringify(workflow, null, 2);
 
-    const y = (-viewport.y + window.innerHeight / 2) / zoom;
+    const blob = new Blob([data], {
+      type: "application/json",
+    });
 
-    addNode(type, { x, y });
+    const url = URL.createObjectURL(blob);
+
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "workflow.json";
+    a.click();
+
+    URL.revokeObjectURL(url);
+  };
+
+  /* ================= IMPORT ================= */
+  const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+
+    if (!file) return;
+
+    const reader = new FileReader();
+
+    reader.onload = (event) => {
+      try {
+        const json = JSON.parse(event.target?.result as string);
+
+        if (!json.nodes || !json.edges) {
+          alert("Invalid workflow ❌");
+          return;
+        }
+
+        setWorkflow(json);
+        alert("Imported ✅");
+      } catch {
+        alert("Invalid JSON ❌");
+      }
+    };
+
+    reader.readAsText(file);
+    e.target.value = "";
   };
 
   return (
-    <div className="p-4 h-full bg-white flex flex-col">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-4">
+    <div className="h-full flex flex-col bg-white text-gray-900 opacity-100">
+      {/* ================= HEADER ================= */}
+      <div className="p-4 border-b flex items-center justify-between">
         <h2 className="font-semibold text-lg">Nodes</h2>
 
         <button onClick={closeLeft}>
@@ -571,27 +667,45 @@ export default function Sidebar() {
         </button>
       </div>
 
-      {/* Buttons */}
-      <div className="space-y-3">
+      {/* ================= LIST ================= */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-3">
+        {["Start", "Approval", "End"].map((type) => (
+          <div
+            key={type}
+            draggable
+            onDragStart={(e) => onDragStart(e, type)}
+            onClick={() => handleAdd(type)}
+            className="cursor-pointer border rounded px-3 py-2 hover:bg-gray-100 active:bg-gray-200"
+          >
+            {type}
+          </div>
+        ))}
+      </div>
+
+      {/* ================= FOOTER ================= */}
+      <div className="border-t p-4 space-y-3">
+        <input
+          ref={fileRef}
+          type="file"
+          accept=".json"
+          onChange={handleImport}
+          className="hidden"
+        />
+
         <button
-          onClick={() => handleAdd("Start")}
-          className="w-full border rounded px-3 py-2 hover:bg-gray-100"
+          onClick={handleExport}
+          className="w-full flex items-center justify-center gap-2 border rounded px-3 py-2 hover:bg-gray-100"
         >
-          Start
+          <Download size={16} />
+          Export JSON
         </button>
 
         <button
-          onClick={() => handleAdd("Approval")}
-          className="w-full border rounded px-3 py-2 hover:bg-gray-100"
+          onClick={() => fileRef.current?.click()}
+          className="w-full flex items-center justify-center gap-2 border rounded px-3 py-2 hover:bg-gray-100"
         >
-          Approval
-        </button>
-
-        <button
-          onClick={() => handleAdd("End")}
-          className="w-full border rounded px-3 py-2 hover:bg-gray-100"
-        >
-          End
+          <Upload size={16} />
+          Import JSON
         </button>
       </div>
     </div>
@@ -606,6 +720,8 @@ import { ReactNode } from "react";
 import { Plus } from "lucide-react";
 import { useWorkflowStore } from "@/store/workflowStore";
 
+const TOP_OFFSET = 64; // Navbar height
+
 export default function WorkflowLayout({
   sidebar,
   children,
@@ -619,13 +735,27 @@ export default function WorkflowLayout({
   const toggleLeft = useWorkflowStore((s) => s.toggleLeft);
 
   return (
-    <div className="h-screen w-screen flex overflow-hidden relative bg-white">
-      {/* Left Sidebar */}
-      {isLeftOpen && (
-        <div className="w-64 border-r bg-white text-gray-900">{sidebar}</div>
-      )}
+    <div
+      className="relative w-screen bg-white overflow-hidden"
+      style={{
+        height: `calc(100vh - ${TOP_OFFSET}px)`,
+        marginTop: TOP_OFFSET,
+      }}
+    >
+      {/* ================= SIDEBAR ================= */}
+      <div
+        className={`
+          absolute left-0 top-0 z-40
+          w-64 h-full
+          bg-white border-r
+          transition-transform duration-300
+          ${isLeftOpen ? "translate-x-0" : "-translate-x-full"}
+        `}
+      >
+        {sidebar}
+      </div>
 
-      {/* Reopen Button */}
+      {/* ================= OPEN BTN ================= */}
       {!isLeftOpen && (
         <button
           onClick={toggleLeft}
@@ -635,12 +765,14 @@ export default function WorkflowLayout({
         </button>
       )}
 
-      {/* Canvas */}
-      <div className="flex-1 relative">{children}</div>
+      {/* ================= CANVAS ================= */}
+      <div className="w-full h-full relative">{children}</div>
 
-      {/* Right Panel */}
+      {/* ================= RIGHT PANEL ================= */}
       {rightPanel && (
-        <div className="w-72 border-l bg-white text-gray-900">{rightPanel}</div>
+        <div className="absolute top-0 right-0 h-full w-72 border-l bg-white z-40">
+          {rightPanel}
+        </div>
       )}
     </div>
   );
