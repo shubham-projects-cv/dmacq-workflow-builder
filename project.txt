@@ -129,7 +129,8 @@ export default function Home() {
 ----------------
 "use client";
 
-import React, { useCallback, useRef } from "react";
+import React, { useCallback, useRef, useState } from "react";
+import { useWorkflowStream } from "@/hooks/useWorkflowStream";
 
 import ReactFlow, {
   Controls,
@@ -143,6 +144,7 @@ import ReactFlow, {
 import StartNode from "@/components/nodes/StartNode";
 import ApprovalNode from "@/components/nodes/ApprovalNode";
 import EndNode from "@/components/nodes/EndNode";
+import EmailNode from "@/components/nodes/EmailNode";
 
 import DeletableEdge from "@/components/edges/DeletableEdge";
 
@@ -152,7 +154,49 @@ import NodeSettings from "@/components/NodeSettings";
 
 import { useWorkflowStore } from "@/store/workflowStore";
 
+/* ================= Condition Picker ================= */
+
+function ConditionPicker({
+  x,
+  y,
+  onSelect,
+}: {
+  x: number;
+  y: number;
+  onSelect: (v: "approve" | "deny") => void;
+}) {
+  return (
+    <div
+      style={{
+        position: "fixed",
+        top: y,
+        left: x,
+        zIndex: 1000,
+      }}
+      className="bg-white border rounded shadow p-2 flex gap-2"
+    >
+      <button
+        onClick={() => onSelect("approve")}
+        className="px-3 py-1 rounded bg-green-500 text-white text-sm"
+      >
+        Approve
+      </button>
+
+      <button
+        onClick={() => onSelect("deny")}
+        className="px-3 py-1 rounded bg-red-500 text-white text-sm"
+      >
+        Deny
+      </button>
+    </div>
+  );
+}
+
+/* ================= Page ================= */
+
 export default function WorkflowPage() {
+  const events = useWorkflowStream();
+
   const nodes = useWorkflowStore((s) => s.workflow.nodes);
   const edges = useWorkflowStore((s) => s.workflow.edges);
 
@@ -168,26 +212,84 @@ export default function WorkflowPage() {
   const closeSettings = useWorkflowStore((s) => s.closeSettings);
   const settingsId = useWorkflowStore((s) => s.settingsNodeId);
 
-  /* ✅ ReactFlow Instance */
+  /* ================= ReactFlow ================= */
+
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const reactFlowInstance = useRef<ReactFlowInstance | null>(null);
 
+  /* ================= Condition ================= */
+
+  const [pendingConnection, setPendingConnection] = useState<Connection | null>(
+    null,
+  );
+
+  const [pickerPos, setPickerPos] = useState({ x: 0, y: 0 });
+
+  /* ================= Add Node In Viewport ================= */
+
+  const addNodeInView = useCallback(
+    (type: string) => {
+      if (!reactFlowWrapper.current || !reactFlowInstance.current) return;
+
+      const bounds = reactFlowWrapper.current.getBoundingClientRect();
+
+      const center = reactFlowInstance.current.screenToFlowPosition({
+        x: bounds.left + bounds.width / 2,
+        y: bounds.top + bounds.height / 2,
+      });
+
+      addNode(type, center);
+    },
+    [addNode],
+  );
+
+  /* ================= Connect ================= */
+
   const onConnect = useCallback(
     (params: Connection) => {
+      const sourceNode = nodes.find((n) => n.id === params.source);
+
+      if (sourceNode?.type === "approval") {
+        setPendingConnection(params);
+
+        setPickerPos({
+          x: window.innerWidth / 2 - 60,
+          y: window.innerHeight / 2 - 30,
+        });
+
+        return;
+      }
+
       const e = addEdge(params, []);
 
       if (e.length) addStoreEdge(e[0]);
     },
-    [addStoreEdge],
+    [addStoreEdge, nodes],
   );
 
-  /* ✅ Allow Drop */
+  const handleConditionSelect = (v: "approve" | "deny") => {
+    if (!pendingConnection) return;
+
+    const e = addEdge(
+      {
+        ...pendingConnection,
+        data: { condition: v },
+      },
+      [],
+    );
+
+    if (e.length) addStoreEdge(e[0]);
+
+    setPendingConnection(null);
+  };
+
+  /* ================= Drag ================= */
+
   const onDragOver = useCallback((event: React.DragEvent) => {
     event.preventDefault();
     event.dataTransfer.dropEffect = "move";
   }, []);
 
-  /* ✅ Drop Handler */
   const onDrop = useCallback(
     (event: React.DragEvent) => {
       event.preventDefault();
@@ -210,10 +312,13 @@ export default function WorkflowPage() {
     [addNode],
   );
 
+  /* ================= Types ================= */
+
   const nodeTypes = {
     start: StartNode,
     approval: ApprovalNode,
     end: EndNode,
+    email: EmailNode,
   };
 
   const edgeTypes = {
@@ -228,10 +333,9 @@ export default function WorkflowPage() {
   return (
     <ReactFlowProvider>
       <WorkflowLayout
-        sidebar={<Sidebar />}
+        sidebar={<Sidebar onAddNode={addNodeInView} />}
         rightPanel={settingsId ? <NodeSettings /> : null}
       >
-        {/* ✅ Wrapper Needed for Drop */}
         <div
           ref={reactFlowWrapper}
           className="w-full h-full"
@@ -247,27 +351,29 @@ export default function WorkflowPage() {
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
             onInit={(rf) => (reactFlowInstance.current = rf)}
-            selectNodesOnDrag={false}
-            elementsSelectable
-            onNodeClick={(_, node) => {
-              selectNode(node.id);
-              selectEdge(null);
-            }}
-            onEdgeClick={(_, edge) => {
-              selectEdge(edge.id);
-              selectNode(null);
-              closeSettings();
-            }}
-            onPaneClick={() => {
-              selectNode(null);
-              selectEdge(null);
-              closeSettings();
-            }}
             fitView
           >
             <Controls />
             <Background />
           </ReactFlow>
+
+          {pendingConnection && (
+            <ConditionPicker
+              x={pickerPos.x}
+              y={pickerPos.y}
+              onSelect={handleConditionSelect}
+            />
+          )}
+
+          <div className="absolute bottom-2 right-2 bg-white border p-3 rounded shadow text-xs w-64 max-h-40 overflow-auto">
+            <div className="font-semibold mb-1">Workflow Status</div>
+
+            {events.map((e, i) => (
+              <div key={i}>
+                {e.status} {e.message || ""}
+              </div>
+            ))}
+          </div>
         </div>
       </WorkflowLayout>
     </ReactFlowProvider>
@@ -280,8 +386,45 @@ export default function WorkflowPage() {
 
 import { EdgeProps, getBezierPath } from "reactflow";
 import { Trash2 } from "lucide-react";
+import { useState } from "react";
 
 import { useWorkflowStore } from "@/store/workflowStore";
+
+/* ================= Condition Picker ================= */
+
+function EdgeConditionPicker({
+  onSelect,
+  onClose,
+}: {
+  onSelect: (v: "approve" | "deny") => void;
+  onClose: () => void;
+}) {
+  return (
+    <div className="bg-white border rounded shadow p-2 flex gap-2">
+      <button
+        onClick={() => {
+          onSelect("approve");
+          onClose();
+        }}
+        className="px-3 py-1 rounded bg-green-500 text-white text-sm"
+      >
+        Approve
+      </button>
+
+      <button
+        onClick={() => {
+          onSelect("deny");
+          onClose();
+        }}
+        className="px-3 py-1 rounded bg-red-500 text-white text-sm"
+      >
+        Deny
+      </button>
+    </div>
+  );
+}
+
+/* ================= Edge ================= */
 
 export default function DeletableEdge({
   id,
@@ -290,8 +433,12 @@ export default function DeletableEdge({
   targetX,
   targetY,
   selected,
+  data,
 }: EdgeProps) {
   const deleteEdge = useWorkflowStore((s) => s.deleteEdge);
+  const updateEdgeData = useWorkflowStore((s) => s.updateEdgeData);
+
+  const [editing, setEditing] = useState(false);
 
   const [path, cx, cy] = getBezierPath({
     sourceX,
@@ -300,18 +447,81 @@ export default function DeletableEdge({
     targetY,
   });
 
+  const condition = data?.condition;
+
+  const isApprove = condition === "approve";
+  const isDeny = condition === "deny";
+
+  /* Position offsets */
+  const labelOffsetX = -40;
+  const deleteOffsetX = condition ? 55 : 12;
+
   return (
     <>
+      {/* ================= LINE ================= */}
+
       <path
         d={path}
-        stroke={selected ? "#ef4444" : "#6366f1"}
+        stroke={
+          isApprove
+            ? "#22c55e"
+            : isDeny
+              ? "#ef4444"
+              : selected
+                ? "#6366f1"
+                : "#94a3b8"
+        }
         strokeWidth={2}
         fill="none"
       />
 
-      {/* ✅ Only when selected */}
+      {/* ================= CONDITION LABEL ================= */}
+
+      {condition && (
+        <foreignObject
+          x={cx + labelOffsetX}
+          y={cy - 16}
+          width={80}
+          height={40}
+          style={{ overflow: "visible" }}
+        >
+          <div className="flex items-center justify-center">
+            {!editing ? (
+              <button
+                onClick={() => setEditing(true)}
+                className={`px-3 py-1 rounded-full text-xs font-medium shadow
+                  ${
+                    isApprove
+                      ? "bg-green-500 text-white"
+                      : "bg-red-500 text-white"
+                  }
+                `}
+              >
+                {isApprove ? "Approve" : "Deny"}
+              </button>
+            ) : (
+              <EdgeConditionPicker
+                onSelect={(v) =>
+                  updateEdgeData(id, {
+                    condition: v,
+                  })
+                }
+                onClose={() => setEditing(false)}
+              />
+            )}
+          </div>
+        </foreignObject>
+      )}
+
+      {/* ================= DELETE (MOVED) ================= */}
+
       {selected && (
-        <foreignObject x={cx + 10} y={cy - 15} width={30} height={30}>
+        <foreignObject
+          x={cx + deleteOffsetX}
+          y={cy - 14}
+          width={30}
+          height={30}
+        >
           <button
             onClick={() => deleteEdge(id)}
             className="w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center shadow"
@@ -427,6 +637,79 @@ export default function ApprovalNode({ id, data, selected }: NodeProps) {
       </div>
 
       {/* ================= HANDLES ================= */}
+      <Handle type="target" position={Position.Top} />
+      <Handle type="source" position={Position.Bottom} />
+    </div>
+  );
+}
+
+### ./components/nodes/EmailNode.tsx
+----------------
+"use client";
+
+import { Handle, Position, NodeProps } from "reactflow";
+import { Mail, Trash2, Copy, Settings, User } from "lucide-react";
+
+import { useWorkflowStore } from "@/store/workflowStore";
+
+export default function EmailNode({ id, data, selected }: NodeProps) {
+  const deleteNode = useWorkflowStore((s) => s.deleteNode);
+  const duplicateNode = useWorkflowStore((s) => s.duplicateNode);
+  const openSettings = useWorkflowStore((s) => s.openSettings);
+
+  return (
+    <div className="relative flex min-w-[220px] max-w-[220px] h-[70px] rounded-lg border shadow-sm bg-white">
+      {/* ================= ACTIONS ================= */}
+
+      {selected && (
+        <div className="absolute -right-12 top-1/2 -translate-y-1/2 flex flex-col gap-2 z-50">
+          <button
+            onClick={() => openSettings(id)}
+            className="p-2 bg-blue-500 text-white rounded-full"
+          >
+            <Settings size={14} />
+          </button>
+
+          <button
+            onClick={() => duplicateNode(id)}
+            className="p-2 bg-blue-500 text-white rounded-full"
+          >
+            <Copy size={14} />
+          </button>
+
+          <button
+            onClick={() => deleteNode(id)}
+            className="p-2 bg-red-500 text-white rounded-full"
+          >
+            <Trash2 size={14} />
+          </button>
+        </div>
+      )}
+
+      {/* ================= ICON ================= */}
+
+      <div className="bg-indigo-700 px-3 flex items-center justify-center">
+        <Mail className="text-white" size={18} />
+      </div>
+
+      {/* ================= CONTENT ================= */}
+
+      <div className="p-2 flex-1 text-[11px] overflow-hidden">
+        <div className="font-semibold truncate leading-tight">
+          {data.label || "Email"}
+        </div>
+
+        <div className="mt-1 flex items-center gap-1 overflow-hidden">
+          <User size={12} className="shrink-0 text-gray-500" />
+
+          <span className="truncate max-w-[150px] text-[11px] text-gray-600">
+            {data.email || "No receiver email"}
+          </span>
+        </div>
+      </div>
+
+      {/* ================= HANDLES ================= */}
+
       <Handle type="target" position={Position.Top} />
       <Handle type="source" position={Position.Bottom} />
     </div>
@@ -567,6 +850,8 @@ export default function NodeSettings() {
 
   if (!node) return null;
 
+  const isEmail = node.type === "email";
+
   const handleChange =
     (field: string) => (e: ChangeEvent<HTMLInputElement>) => {
       updateNodeData(node.id, {
@@ -577,6 +862,7 @@ export default function NodeSettings() {
   return (
     <div className="h-full bg-white text-gray-900 p-4">
       {/* ================= HEADER ================= */}
+
       <div className="flex items-center justify-between mb-5 border-b pb-3">
         <h3 className="font-semibold text-lg">Node Settings</h3>
 
@@ -586,8 +872,10 @@ export default function NodeSettings() {
       </div>
 
       {/* ================= FORM ================= */}
+
       <div className="space-y-4 text-sm">
         {/* LABEL */}
+
         <div>
           <label className="flex items-center gap-1 mb-1 font-medium">
             <Type size={14} />
@@ -602,33 +890,37 @@ export default function NodeSettings() {
         </div>
 
         {/* EMAIL */}
+
         <div>
           <label className="flex items-center gap-1 mb-1 font-medium">
             <Mail size={14} />
-            Approval Email
+            Receiver Email
           </label>
 
           <input
             value={node.data?.email || ""}
             onChange={handleChange("email")}
-            placeholder="approver@email.com"
+            placeholder="user@email.com"
             className="w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
           />
         </div>
 
-        {/* APPROVER */}
-        <div>
-          <label className="flex items-center gap-1 mb-1 font-medium">
-            <User size={14} />
-            Approver Name
-          </label>
+        {/* APPROVER ONLY FOR APPROVAL */}
 
-          <input
-            value={node.data?.approver || ""}
-            onChange={handleChange("approver")}
-            className="w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-          />
-        </div>
+        {!isEmail && (
+          <div>
+            <label className="flex items-center gap-1 mb-1 font-medium">
+              <User size={14} />
+              Approver Name
+            </label>
+
+            <input
+              value={node.data?.approver || ""}
+              onChange={handleChange("approver")}
+              className="w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            />
+          </div>
+        )}
       </div>
     </div>
   );
@@ -638,21 +930,42 @@ export default function NodeSettings() {
 ----------------
 "use client";
 
-import { X, Upload, Download } from "lucide-react";
+import {
+  X,
+  Upload,
+  Download,
+  Mail,
+  FileText,
+  CheckCircle,
+  Square,
+} from "lucide-react";
 import { useRef } from "react";
 
 import { useWorkflowStore } from "@/store/workflowStore";
 
-export default function Sidebar() {
+/* ================= NODE CONFIG ================= */
+
+const NODE_LIST = [
+  { type: "Start", label: "Start", icon: FileText },
+  { type: "Approval", label: "Approval", icon: CheckCircle },
+  { type: "End", label: "End", icon: Square },
+  { type: "Email", label: "Email", icon: Mail },
+];
+
+export default function Sidebar({
+  onAddNode,
+}: {
+  onAddNode: (type: string) => void;
+}) {
   const closeLeft = useWorkflowStore((s) => s.closeLeft);
 
   const workflow = useWorkflowStore((s) => s.workflow);
   const setWorkflow = useWorkflowStore((s) => s.setWorkflow);
-  const addNode = useWorkflowStore((s) => s.addNode);
 
   const fileRef = useRef<HTMLInputElement>(null);
 
   /* ================= DRAG ================= */
+
   const onDragStart = (
     event: React.DragEvent<HTMLDivElement>,
     nodeType: string,
@@ -661,13 +974,8 @@ export default function Sidebar() {
     event.dataTransfer.effectAllowed = "move";
   };
 
-  /* ================= CLICK ADD ================= */
-  const handleAdd = (type: string) => {
-    // Add to center
-    addNode(type, { x: 200, y: 200 });
-  };
-
   /* ================= EXPORT ================= */
+
   const handleExport = () => {
     const data = JSON.stringify(workflow, null, 2);
 
@@ -686,6 +994,7 @@ export default function Sidebar() {
   };
 
   /* ================= IMPORT ================= */
+
   const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
 
@@ -714,8 +1023,9 @@ export default function Sidebar() {
   };
 
   return (
-    <div className="h-full flex flex-col bg-white text-gray-900 opacity-100 p-4">
-      {/* ================= HEADER ================= */}
+    <div className="h-full flex flex-col bg-white text-gray-900 p-4">
+      {/* HEADER */}
+
       <div className="border-b flex items-center justify-between mb-5 pb-3">
         <h2 className="font-semibold text-lg">Nodes</h2>
 
@@ -724,22 +1034,30 @@ export default function Sidebar() {
         </button>
       </div>
 
-      {/* ================= LIST ================= */}
+      {/* LIST */}
+
       <div className="flex-1 overflow-y-auto space-y-3">
-        {["Start", "Approval", "End"].map((type) => (
-          <div
-            key={type}
-            draggable
-            onDragStart={(e) => onDragStart(e, type)}
-            onClick={() => handleAdd(type)}
-            className="cursor-pointer border rounded px-3 py-2 hover:bg-gray-100 active:bg-gray-200"
-          >
-            {type}
-          </div>
-        ))}
+        {NODE_LIST.map((node) => {
+          const Icon = node.icon;
+
+          return (
+            <div
+              key={node.type}
+              draggable
+              onDragStart={(e) => onDragStart(e, node.type)}
+              onClick={() => onAddNode(node.type)}
+              className="cursor-pointer border rounded px-3 py-2 hover:bg-gray-100 active:bg-gray-200 flex items-center gap-2 text-sm font-medium"
+            >
+              <Icon size={16} className="text-gray-600" />
+
+              {node.label}
+            </div>
+          );
+        })}
       </div>
 
-      {/* ================= FOOTER ================= */}
+      {/* FOOTER */}
+
       <div className="space-y-3">
         <input
           ref={fileRef}
@@ -774,43 +1092,63 @@ export default function Sidebar() {
 "use client";
 
 import { Undo2, Redo2, Save, Send } from "lucide-react";
+import { useWorkflowStore } from "@/store/workflowStore";
 
 export default function TopNavbar() {
+  const workflow = useWorkflowStore((s) => s.workflow);
+
+  const handlePublish = async () => {
+    try {
+      const res = await fetch("http://localhost:4000/workflow/publish", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          workflow, // ✅ send full workflow
+        }),
+      });
+
+      const data = await res.json();
+
+      if (data.success) {
+        alert("Workflow Started ✅\nID: " + data.workflowId);
+      } else {
+        alert("Failed ❌: " + data.error);
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Server error ❌");
+    }
+  };
+
   return (
     <div className="w-full bg-white border-b shadow-sm px-3 py-2">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        {/* ================= LEFT ================= */}
+        {/* LEFT */}
         <div className="flex items-center gap-2">
-          <button
-            className="flex items-center gap-1 px-2 py-1.5 border rounded hover:bg-gray-100 text-sm"
-            title="Undo"
-          >
+          <button className="flex items-center gap-1 px-2 py-1.5 border rounded hover:bg-gray-100 text-sm">
             <Undo2 size={16} />
             <span className="hidden sm:inline">Undo</span>
           </button>
 
-          <button
-            className="flex items-center gap-1 px-2 py-1.5 border rounded hover:bg-gray-100 text-sm"
-            title="Redo"
-          >
+          <button className="flex items-center gap-1 px-2 py-1.5 border rounded hover:bg-gray-100 text-sm">
             <Redo2 size={16} />
             <span className="hidden sm:inline">Redo</span>
           </button>
         </div>
 
-        {/* ================= RIGHT ================= */}
+        {/* RIGHT */}
         <div className="flex items-center gap-2">
-          <button
-            className="flex items-center gap-1 px-2 py-1.5 border rounded hover:bg-gray-100 text-sm"
-            title="Save Draft"
-          >
+          <button className="flex items-center gap-1 px-2 py-1.5 border rounded hover:bg-gray-100 text-sm">
             <Save size={16} />
             <span className="hidden sm:inline">Save Draft</span>
           </button>
 
+          {/* ✅ PUBLISH */}
           <button
+            onClick={handlePublish}
             className="flex items-center gap-1 px-3 py-1.5 bg-indigo-600 text-white rounded hover:bg-indigo-700 text-sm"
-            title="Publish"
           >
             <Send size={16} />
             <span className="hidden sm:inline">Publish</span>
@@ -908,6 +1246,41 @@ const eslintConfig = defineConfig([
 
 export default eslintConfig;
 
+### ./hooks/useWorkflowStream.ts
+----------------
+import { useEffect, useState } from "react";
+
+/* ================= TYPES ================= */
+
+export type WorkflowEvent = {
+  workflowId: string;
+  status: string;
+  message?: string;
+  timestamp: string;
+};
+
+/* ================= HOOK ================= */
+
+export function useWorkflowStream() {
+  const [events, setEvents] = useState<WorkflowEvent[]>([]);
+
+  useEffect(() => {
+    const es = new EventSource("http://localhost:4000/stream");
+
+    es.onmessage = (e) => {
+      const data: WorkflowEvent = JSON.parse(e.data);
+
+      setEvents((prev) => [...prev, data]);
+    };
+
+    return () => {
+      es.close();
+    };
+  }, []);
+
+  return events;
+}
+
 ### ./next-env.d.ts
 ----------------
 /// <reference types="next" />
@@ -1001,6 +1374,10 @@ type NodeData = {
   nodeType?: string;
 };
 
+type EdgeData = {
+  condition?: "approve" | "deny";
+};
+
 type WorkflowMeta = {
   version: string;
   createdBy: string;
@@ -1009,18 +1386,16 @@ type WorkflowMeta = {
 
 export type WorkflowJSON = {
   nodes: Node<NodeData>[];
-  edges: Edge[];
+  edges: Edge<EdgeData>[];
   meta: WorkflowMeta;
 };
 
 type WorkflowState = {
   workflow: WorkflowJSON;
 
-  // ✅ Selection
   activeNodeId: string | null;
   activeEdgeId: string | null;
 
-  // ✅ Settings panel
   settingsNodeId: string | null;
 
   isLeftOpen: boolean;
@@ -1046,7 +1421,7 @@ type WorkflowState = {
   /* Workflow */
 
   addNode: (type: string, pos?: Position) => void;
-  addEdge: (edge: Edge) => void;
+  addEdge: (edge: Edge<EdgeData>) => void;
 
   deleteNode: (id: string) => void;
   deleteEdge: (id: string) => void;
@@ -1054,6 +1429,8 @@ type WorkflowState = {
   duplicateNode: (id: string) => void;
 
   updateNodeData: (id: string, data: Partial<NodeData>) => void;
+
+  updateEdgeData: (id: string, data: Partial<EdgeData>) => void;
 
   setWorkflow: (wf: WorkflowJSON) => void;
 };
@@ -1130,8 +1507,6 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => {
 
   return {
     workflow: initial,
-
-    /* Selection */
 
     activeNodeId: null,
     activeEdgeId: null,
@@ -1319,6 +1694,28 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => {
                   },
                 }
               : n,
+          ),
+        },
+      }));
+
+      persist();
+    },
+
+    updateEdgeData: (id, data) => {
+      set((s) => ({
+        workflow: {
+          ...s.workflow,
+
+          edges: s.workflow.edges.map((e) =>
+            e.id === id
+              ? {
+                  ...e,
+                  data: {
+                    ...e.data,
+                    ...data,
+                  },
+                }
+              : e,
           ),
         },
       }));

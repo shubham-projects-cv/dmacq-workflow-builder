@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useCallback, useRef, useState } from "react";
+import { useWorkflowStream } from "@/hooks/useWorkflowStream";
 
 import ReactFlow, {
   Controls,
@@ -65,6 +66,8 @@ function ConditionPicker({
 /* ================= Page ================= */
 
 export default function WorkflowPage() {
+  const events = useWorkflowStream();
+
   const nodes = useWorkflowStore((s) => s.workflow.nodes);
   const edges = useWorkflowStore((s) => s.workflow.edges);
 
@@ -87,8 +90,9 @@ export default function WorkflowPage() {
 
   /* ================= Condition ================= */
 
-  const [pendingConnection, setPendingConnection] =
-    useState<Connection | null>(null);
+  const [pendingConnection, setPendingConnection] = useState<Connection | null>(
+    null,
+  );
 
   const [pickerPos, setPickerPos] = useState({ x: 0, y: 0 });
 
@@ -231,6 +235,16 @@ export default function WorkflowPage() {
               onSelect={handleConditionSelect}
             />
           )}
+
+          <div className="absolute bottom-2 right-2 bg-white border p-3 rounded shadow text-xs w-64 max-h-40 overflow-auto">
+            <div className="font-semibold mb-1">Workflow Status</div>
+
+            {events.map((e, i) => (
+              <div key={i}>
+                {e.status} {e.message || ""}
+              </div>
+            ))}
+          </div>
         </div>
       </WorkflowLayout>
     </ReactFlowProvider>
