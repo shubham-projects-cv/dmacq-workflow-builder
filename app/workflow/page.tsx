@@ -1,5 +1,9 @@
 "use client";
 
+import StartNode from "@/components/nodes/StartNode";
+import ApprovalNode from "@/components/nodes/ApprovalNode";
+import EndNode from "@/components/nodes/EndNode";
+
 import React, { useCallback } from "react";
 import ReactFlow, {
   Controls,
@@ -50,6 +54,12 @@ export default function WorkflowPage() {
     selectNode(null);
   }, [selectNode]);
 
+  const nodeTypes = {
+    start: StartNode,
+    approval: ApprovalNode,
+    end: EndNode,
+  };
+
   return (
     <ReactFlowProvider>
       <WorkflowLayout
@@ -57,6 +67,7 @@ export default function WorkflowPage() {
         rightPanel={selectedNodeId ? <NodeSettings /> : null}
       >
         <ReactFlow
+          nodeTypes={nodeTypes}
           nodes={nodes}
           edges={edges}
           onNodesChange={onNodesChange}

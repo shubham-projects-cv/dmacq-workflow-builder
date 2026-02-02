@@ -17,6 +17,7 @@ type Position = {
 
 type NodeData = {
   label?: string;
+  subLabel?: string;
   email?: string;
   approver?: string;
   nodeType?: string;
@@ -90,10 +91,11 @@ function createEmptyWorkflow(): WorkflowJSON {
     nodes: [
       {
         id: "start",
-        type: "default",
+        type: "start", // 👈 IMPORTANT
         position: { x: 250, y: 100 },
         data: {
           label: "Start",
+          subLabel: "Starting Point",
           nodeType: "start",
         },
       },
@@ -179,14 +181,18 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => {
     /* -------- Workflow -------- */
 
     addNode: (type, position) => {
+      const nodeType = type.toLowerCase();
+
       const newNode: Node<NodeData> = {
         id: crypto.randomUUID(),
-        type: "default",
+
+        type: nodeType,
+
         position: position ?? { x: 0, y: 0 },
 
         data: {
           label: type,
-          nodeType: type.toLowerCase(),
+          nodeType,
         },
       };
 
