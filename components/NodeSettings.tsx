@@ -2,17 +2,19 @@
 
 import { X } from "lucide-react";
 import { ChangeEvent } from "react";
+
 import { useWorkflowStore } from "@/store/workflowStore";
 
 export default function NodeSettings() {
-  const selectedId = useWorkflowStore((s) => s.selectedNodeId);
+  const nodeId = useWorkflowStore((s) => s.settingsNodeId);
   const nodes = useWorkflowStore((s) => s.workflow.nodes);
-  const selectNode = useWorkflowStore((s) => s.selectNode);
+
+  const close = useWorkflowStore((s) => s.closeSettings);
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData);
 
-  if (!selectedId) return null;
+  if (!nodeId) return null;
 
-  const node = nodes.find((n) => n.id === selectedId);
+  const node = nodes.find((n) => n.id === nodeId);
 
   if (!node) return null;
 
@@ -29,7 +31,7 @@ export default function NodeSettings() {
       <div className="flex items-center justify-between mb-4">
         <h3 className="font-semibold">Node Settings</h3>
 
-        <button onClick={() => selectNode(null)}>
+        <button onClick={close}>
           <X size={18} />
         </button>
       </div>
@@ -47,23 +49,21 @@ export default function NodeSettings() {
         </div>
 
         <div>
-          <label className="block mb-1 font-medium">Approver Email</label>
+          <label className="block mb-1 font-medium">Email</label>
 
           <input
             value={node.data?.email || ""}
             onChange={handleChange("email")}
-            placeholder="user@email.com"
             className="w-full border rounded px-2 py-1"
           />
         </div>
 
         <div>
-          <label className="block mb-1 font-medium">Approver Name</label>
+          <label className="block mb-1 font-medium">Approver</label>
 
           <input
             value={node.data?.approver || ""}
             onChange={handleChange("approver")}
-            placeholder="Manager Name"
             className="w-full border rounded px-2 py-1"
           />
         </div>

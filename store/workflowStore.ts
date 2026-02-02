@@ -1,4 +1,5 @@
 import { create } from "zustand";
+
 import {
   Node,
   Edge,
@@ -36,66 +37,83 @@ export type WorkflowJSON = {
 };
 
 type WorkflowState = {
-  deleteNode: (id: string) => void;
-  duplicateNode: (id: string) => void;
-
   workflow: WorkflowJSON;
 
-  selectedNodeId: string | null;
+  // ✅ Selection
+  activeNodeId: string | null;
+  activeEdgeId: string | null;
+
+  // ✅ Settings panel
+  settingsNodeId: string | null;
+
   isLeftOpen: boolean;
 
-  onNodesChange: (changes: NodeChange[]) => void;
-  onEdgesChange: (changes: EdgeChange[]) => void;
+  /* ReactFlow */
+
+  onNodesChange: (c: NodeChange[]) => void;
+  onEdgesChange: (c: EdgeChange[]) => void;
+
+  /* Selection */
 
   selectNode: (id: string | null) => void;
+  selectEdge: (id: string | null) => void;
+
+  openSettings: (id: string) => void;
+  closeSettings: () => void;
+
+  /* UI */
 
   toggleLeft: () => void;
   closeLeft: () => void;
 
-  addNode: (type: string, position?: Position) => void;
+  /* Workflow */
+
+  addNode: (type: string, pos?: Position) => void;
   addEdge: (edge: Edge) => void;
+
+  deleteNode: (id: string) => void;
+  deleteEdge: (id: string) => void;
+
+  duplicateNode: (id: string) => void;
 
   updateNodeData: (id: string, data: Partial<NodeData>) => void;
 
-  setWorkflow: (workflow: WorkflowJSON) => void;
+  setWorkflow: (wf: WorkflowJSON) => void;
 };
 
-/* ---------------- Constants ---------------- */
+/* ---------------- Storage ---------------- */
 
-const STORAGE_KEY = "workflow-builder:json:v1";
+const KEY = "workflow-builder:v1";
 
 /* ---------------- Helpers ---------------- */
 
-function loadWorkflow(): WorkflowJSON | null {
+function load(): WorkflowJSON | null {
   if (typeof window === "undefined") return null;
 
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(KEY);
+
     if (!raw) return null;
 
-    return JSON.parse(raw) as WorkflowJSON;
+    return JSON.parse(raw);
   } catch {
     return null;
   }
 }
 
-function saveWorkflow(workflow: WorkflowJSON): void {
+function save(wf: WorkflowJSON): void {
   if (typeof window === "undefined") return;
 
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(workflow));
-  } catch {
-    //
-  }
+  localStorage.setItem(KEY, JSON.stringify(wf));
 }
 
-function createEmptyWorkflow(): WorkflowJSON {
+function empty(): WorkflowJSON {
   return {
     nodes: [
       {
         id: "start",
-        type: "start", // 👈 IMPORTANT
-        position: { x: 250, y: 100 },
+        type: "start",
+        position: { x: 300, y: 120 },
         data: {
           label: "Start",
           subLabel: "Starting Point",
@@ -117,38 +135,41 @@ function createEmptyWorkflow(): WorkflowJSON {
 /* ---------------- Store ---------------- */
 
 export const useWorkflowStore = create<WorkflowState>((set, get) => {
-  const saved = loadWorkflow();
+  const saved = load();
 
-  const initialWorkflow = saved ?? createEmptyWorkflow();
+  const initial = saved ?? empty();
 
-  const persist = (): void => {
-    const workflow = get().workflow;
+  const persist = () => {
+    const wf = get().workflow;
 
-    saveWorkflow({
-      ...workflow,
+    save({
+      ...wf,
       meta: {
-        ...workflow.meta,
+        ...wf.meta,
         updatedAt: new Date().toISOString(),
       },
     });
   };
 
   return {
-    workflow: initialWorkflow,
+    workflow: initial,
 
-    selectedNodeId: null,
+    /* Selection */
+
+    activeNodeId: null,
+    activeEdgeId: null,
+
+    settingsNodeId: null,
+
     isLeftOpen: true,
 
-    /* -------- ReactFlow -------- */
+    /* ReactFlow */
 
     onNodesChange: (changes) => {
       const nodes = applyNodeChanges(changes, get().workflow.nodes);
 
-      set((state) => ({
-        workflow: {
-          ...state.workflow,
-          nodes,
-        },
+      set((s) => ({
+        workflow: { ...s.workflow, nodes },
       }));
 
       persist();
@@ -157,21 +178,41 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => {
     onEdgesChange: (changes) => {
       const edges = applyEdgeChanges(changes, get().workflow.edges);
 
-      set((state) => ({
-        workflow: {
-          ...state.workflow,
-          edges,
-        },
+      set((s) => ({
+        workflow: { ...s.workflow, edges },
       }));
 
       persist();
     },
 
-    /* -------- UI -------- */
+    /* Selection */
 
     selectNode: (id) => {
-      set({ selectedNodeId: id });
+      set({
+        activeNodeId: id,
+        activeEdgeId: null,
+      });
     },
+
+    selectEdge: (id) => {
+      set({
+        activeEdgeId: id,
+        activeNodeId: null,
+      });
+    },
+
+    openSettings: (id) => {
+      set({
+        settingsNodeId: id,
+        activeNodeId: id,
+      });
+    },
+
+    closeSettings: () => {
+      set({ settingsNodeId: null });
+    },
+
+    /* UI */
 
     toggleLeft: () => {
       set({ isLeftOpen: !get().isLeftOpen });
@@ -181,28 +222,28 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => {
       set({ isLeftOpen: false });
     },
 
-    /* -------- Workflow -------- */
+    /* Workflow */
 
-    addNode: (type, position) => {
-      const nodeType = type.toLowerCase();
+    addNode: (type, pos) => {
+      const t = type.toLowerCase();
 
-      const newNode: Node<NodeData> = {
+      const node: Node<NodeData> = {
         id: crypto.randomUUID(),
 
-        type: nodeType,
+        type: t,
 
-        position: position ?? { x: 0, y: 0 },
+        position: pos ?? { x: 0, y: 0 },
 
         data: {
           label: type,
-          nodeType,
+          nodeType: t,
         },
       };
 
-      set((state) => ({
+      set((s) => ({
         workflow: {
-          ...state.workflow,
-          nodes: [...state.workflow.nodes, newNode],
+          ...s.workflow,
+          nodes: [...s.workflow.nodes, node],
         },
       }));
 
@@ -210,31 +251,97 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => {
     },
 
     addEdge: (edge) => {
-      set((state) => ({
+      set((s) => ({
         workflow: {
-          ...state.workflow,
-          edges: [...state.workflow.edges, edge],
+          ...s.workflow,
+          edges: [...s.workflow.edges, edge],
         },
       }));
 
       persist();
     },
 
-    updateNodeData: (id, data) => {
-      set((state) => ({
-        workflow: {
-          ...state.workflow,
+    deleteNode: (id) => {
+      set((s) => {
+        const nodes = s.workflow.nodes.filter((n) => n.id !== id);
 
-          nodes: state.workflow.nodes.map((node) =>
-            node.id === id
+        const edges = s.workflow.edges.filter(
+          (e) => e.source !== id && e.target !== id,
+        );
+
+        return {
+          workflow: {
+            ...s.workflow,
+            nodes,
+            edges,
+          },
+
+          activeNodeId: null,
+          settingsNodeId: null,
+        };
+      });
+
+      persist();
+    },
+
+    deleteEdge: (id) => {
+      set((s) => ({
+        workflow: {
+          ...s.workflow,
+          edges: s.workflow.edges.filter((e) => e.id !== id),
+        },
+
+        activeEdgeId: null,
+      }));
+
+      persist();
+    },
+
+    duplicateNode: (id) => {
+      set((s) => {
+        const node = s.workflow.nodes.find((n) => n.id === id);
+
+        if (!node) return s;
+
+        const copy = {
+          id: crypto.randomUUID(),
+
+          type: node.type,
+
+          position: {
+            x: node.position.x + 180,
+            y: node.position.y + 100,
+          },
+
+          data: { ...node.data },
+        };
+
+        return {
+          workflow: {
+            ...s.workflow,
+            nodes: [...s.workflow.nodes, copy],
+          },
+        };
+      });
+
+      persist();
+    },
+
+    updateNodeData: (id, data) => {
+      set((s) => ({
+        workflow: {
+          ...s.workflow,
+
+          nodes: s.workflow.nodes.map((n) =>
+            n.id === id
               ? {
-                  ...node,
+                  ...n,
                   data: {
-                    ...node.data,
+                    ...n.data,
                     ...data,
                   },
                 }
-              : node,
+              : n,
           ),
         },
       }));
@@ -242,71 +349,17 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => {
       persist();
     },
 
-    /* -------- Import -------- */
-
-    setWorkflow: (workflow) => {
-      localStorage.removeItem(STORAGE_KEY);
+    setWorkflow: (wf) => {
+      localStorage.removeItem(KEY);
 
       set({
-        workflow,
-        selectedNodeId: null,
+        workflow: wf,
+        activeNodeId: null,
+        activeEdgeId: null,
+        settingsNodeId: null,
       });
 
-      saveWorkflow(workflow);
-    },
-
-    deleteNode: (id) => {
-      set((state) => {
-        const nodes = state.workflow.nodes.filter((n) => n.id !== id);
-
-        const edges = state.workflow.edges.filter(
-          (e) => e.source !== id && e.target !== id,
-        );
-
-        return {
-          workflow: {
-            ...state.workflow,
-            nodes,
-            edges,
-          },
-          selectedNodeId: null,
-        };
-      });
-
-      persist();
-    },
-
-    duplicateNode: (id) => {
-      set((state) => {
-        const node = state.workflow.nodes.find((n) => n.id === id);
-
-        if (!node) return state;
-
-        // ✅ Create fresh clean node (no internals)
-        const newNode = {
-          id: crypto.randomUUID(),
-
-          type: node.type,
-
-          position: {
-            x: node.position.x + 200,
-            y: node.position.y + 120,
-          },
-
-          data: {
-            ...node.data,
-          },
-        };
-
-        return {
-          workflow: {
-            ...state.workflow,
-            nodes: [...state.workflow.nodes, newNode],
-          },
-        };
-      });
-
-      persist();
+      save(wf);
     },
   };
 });
