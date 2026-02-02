@@ -8,6 +8,10 @@ import {
   applyEdgeChanges,
 } from "reactflow";
 
+/* ----------------------------- */
+/* Types */
+/* ----------------------------- */
+
 type Position = {
   x: number;
   y: number;
@@ -17,6 +21,11 @@ type NodeData = {
   label?: string;
   email?: string;
   approver?: string;
+};
+
+type WorkflowSnapshot = {
+  nodes: Node<NodeData>[];
+  edges: Edge[];
 };
 
 type WorkflowState = {
@@ -40,85 +49,164 @@ type WorkflowState = {
   updateNodeData: (id: string, data: Partial<NodeData>) => void;
 };
 
-export const useWorkflowStore = create<WorkflowState>((set, get) => ({
-  nodes: [
-    {
-      id: "1",
-      type: "default",
-      position: { x: 250, y: 100 },
-      data: { label: "Start" },
+/* ----------------------------- */
+/* Constants */
+/* ----------------------------- */
+
+const STORAGE_KEY = "workflow-builder:v1";
+
+/* ----------------------------- */
+/* Helpers */
+/* ----------------------------- */
+
+function loadFromStorage(): WorkflowSnapshot | null {
+  if (typeof window === "undefined") return null;
+
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+
+    if (!raw) return null;
+
+    return JSON.parse(raw) as WorkflowSnapshot;
+  } catch {
+    return null;
+  }
+}
+
+function saveToStorage(snapshot: WorkflowSnapshot): void {
+  if (typeof window === "undefined") return;
+
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
+  } catch {
+    // silently fail (quota / private mode etc.)
+  }
+}
+
+/* ----------------------------- */
+/* Initial Data */
+/* ----------------------------- */
+
+const defaultNodes: Node<NodeData>[] = [
+  {
+    id: "1",
+    type: "default",
+    position: { x: 250, y: 100 },
+    data: { label: "Start" },
+  },
+];
+
+const defaultEdges: Edge[] = [];
+
+/* ----------------------------- */
+/* Store */
+/* ----------------------------- */
+
+export const useWorkflowStore = create<WorkflowState>((set, get) => {
+  /* Load persisted workflow */
+  const saved = loadFromStorage();
+
+  const initialNodes = saved?.nodes ?? defaultNodes;
+  const initialEdges = saved?.edges ?? defaultEdges;
+
+  /* Persist helper */
+  const persist = (): void => {
+    const { nodes, edges } = get();
+
+    saveToStorage({
+      nodes,
+      edges,
+    });
+  };
+
+  return {
+    nodes: initialNodes,
+    edges: initialEdges,
+
+    selectedNodeId: null,
+    isLeftOpen: true,
+
+    /* ----------------------------- */
+    /* ReactFlow handlers */
+    /* ----------------------------- */
+
+    onNodesChange: (changes) => {
+      set({
+        nodes: applyNodeChanges(changes, get().nodes),
+      });
+
+      persist();
     },
-  ],
 
-  edges: [],
+    onEdgesChange: (changes) => {
+      set({
+        edges: applyEdgeChanges(changes, get().edges),
+      });
 
-  selectedNodeId: null,
-  isLeftOpen: true,
+      persist();
+    },
 
-  /* ReactFlow handlers */
+    /* ----------------------------- */
+    /* UI state */
+    /* ----------------------------- */
 
-  onNodesChange: (changes) => {
-    set({
-      nodes: applyNodeChanges(changes, get().nodes),
-    });
-  },
+    selectNode: (id) => {
+      set({ selectedNodeId: id });
+    },
 
-  onEdgesChange: (changes) => {
-    set({
-      edges: applyEdgeChanges(changes, get().edges),
-    });
-  },
+    toggleLeft: () => {
+      set({ isLeftOpen: !get().isLeftOpen });
+    },
 
-  /* UI state */
+    closeLeft: () => {
+      set({ isLeftOpen: false });
+    },
 
-  selectNode: (id) => {
-    set({ selectedNodeId: id });
-  },
+    /* ----------------------------- */
+    /* Workflow actions */
+    /* ----------------------------- */
 
-  toggleLeft: () => {
-    set({ isLeftOpen: !get().isLeftOpen });
-  },
+    addNode: (type, position) => {
+      const newNode: Node<NodeData> = {
+        id: crypto.randomUUID(),
+        type: "default",
+        position: position ?? { x: 0, y: 0 },
+        data: {
+          label: type,
+        },
+      };
 
-  closeLeft: () => {
-    set({ isLeftOpen: false });
-  },
+      set({
+        nodes: [...get().nodes, newNode],
+      });
 
-  /* Workflow actions */
+      persist();
+    },
 
-  addNode: (type, position) => {
-    const newNode: Node<NodeData> = {
-      id: crypto.randomUUID(),
-      type: "default",
-      position: position ?? { x: 0, y: 0 },
-      data: {
-        label: type,
-      },
-    };
+    addEdge: (edge) => {
+      set({
+        edges: [...get().edges, edge],
+      });
 
-    set({
-      nodes: [...get().nodes, newNode],
-    });
-  },
+      persist();
+    },
 
-  addEdge: (edge) => {
-    set({
-      edges: [...get().edges, edge],
-    });
-  },
+    updateNodeData: (id, data) => {
+      set({
+        nodes: get().nodes.map((node) =>
+          node.id === id
+            ? {
+                ...node,
+                data: {
+                  ...node.data,
+                  ...data,
+                },
+              }
+            : node,
+        ),
+      });
 
-  updateNodeData: (id, data) => {
-    set({
-      nodes: get().nodes.map((node) =>
-        node.id === id
-          ? {
-              ...node,
-              data: {
-                ...node.data,
-                ...data,
-              },
-            }
-          : node,
-      ),
-    });
-  },
-}));
+      persist();
+    },
+  };
+});
