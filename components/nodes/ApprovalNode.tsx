@@ -1,30 +1,19 @@
 "use client";
 
-import { Handle, Position } from "reactflow";
+import { Handle, Position, NodeProps } from "reactflow";
 import { CheckCircle, Trash2, Copy, Settings } from "lucide-react";
 
 import { useWorkflowStore } from "@/store/workflowStore";
 
-type Props = {
-  id: string;
-  data: {
-    label?: string;
-    approver?: string;
-  };
-};
-
-export default function ApprovalNode({ id, data }: Props) {
+export default function ApprovalNode({ id, data, selected }: NodeProps) {
   const deleteNode = useWorkflowStore((s) => s.deleteNode);
   const duplicateNode = useWorkflowStore((s) => s.duplicateNode);
   const openSettings = useWorkflowStore((s) => s.openSettings);
 
-  const activeId = useWorkflowStore((s) => s.settingsNodeId);
-
-  const active = activeId === id;
-
   return (
     <div className="relative flex min-w-[180px] max-w-[180px] h-[52px] rounded-lg border shadow-sm bg-white">
-      {active && (
+      {/* ✅ Action Buttons (Only When Selected) */}
+      {selected && (
         <div className="absolute -right-11 top-1/2 -translate-y-1/2 flex flex-col gap-2 z-50">
           <button
             onClick={() => openSettings(id)}
@@ -49,10 +38,12 @@ export default function ApprovalNode({ id, data }: Props) {
         </div>
       )}
 
+      {/* Icon */}
       <div className="bg-emerald-600 px-3 flex items-center justify-center">
         <CheckCircle className="text-white" size={18} />
       </div>
 
+      {/* Content */}
       <div className="p-2 flex-1">
         <div className="text-sm font-semibold truncate">
           {data.label || "Approval"}
@@ -63,6 +54,7 @@ export default function ApprovalNode({ id, data }: Props) {
         )}
       </div>
 
+      {/* Handles */}
       <Handle type="target" position={Position.Top} />
       <Handle type="source" position={Position.Bottom} />
     </div>

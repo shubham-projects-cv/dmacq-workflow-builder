@@ -24,19 +24,17 @@ import { useWorkflowStore } from "@/store/workflowStore";
 
 export default function WorkflowPage() {
   const nodes = useWorkflowStore((s) => s.workflow.nodes);
-
   const edges = useWorkflowStore((s) => s.workflow.edges);
 
   const onNodesChange = useWorkflowStore((s) => s.onNodesChange);
-
   const onEdgesChange = useWorkflowStore((s) => s.onEdgesChange);
 
   const addStoreEdge = useWorkflowStore((s) => s.addEdge);
 
   const selectNode = useWorkflowStore((s) => s.selectNode);
+  const selectEdge = useWorkflowStore((s) => s.selectEdge);
 
   const closeSettings = useWorkflowStore((s) => s.closeSettings);
-
   const settingsId = useWorkflowStore((s) => s.settingsNodeId);
 
   const onConnect = useCallback(
@@ -77,9 +75,21 @@ export default function WorkflowPage() {
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
-          onNodeClick={(_, n) => selectNode(n.id)}
+          /* ✅ IMPORTANT */
+          selectNodesOnDrag={false}
+          elementsSelectable={true}
+          onNodeClick={(_, node) => {
+            selectNode(node.id);
+            selectEdge(null);
+          }}
+          onEdgeClick={(_, edge) => {
+            selectEdge(edge.id);
+            selectNode(null);
+            closeSettings();
+          }}
           onPaneClick={() => {
             selectNode(null);
+            selectEdge(null);
             closeSettings();
           }}
           fitView
