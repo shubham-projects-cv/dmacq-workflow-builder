@@ -282,12 +282,19 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => {
 
         if (!node) return state;
 
+        // ✅ Create fresh clean node (no internals)
         const newNode = {
-          ...node,
           id: crypto.randomUUID(),
+
+          type: node.type,
+
           position: {
-            x: node.position.x + 40,
-            y: node.position.y + 40,
+            x: node.position.x + 200,
+            y: node.position.y + 120,
+          },
+
+          data: {
+            ...node.data,
           },
         };
 

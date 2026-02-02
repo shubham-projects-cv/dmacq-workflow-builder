@@ -25,3 +25,9 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Allow node action buttons to overflow */
+
+.react-flow__node {
+  overflow: visible !important;
+}

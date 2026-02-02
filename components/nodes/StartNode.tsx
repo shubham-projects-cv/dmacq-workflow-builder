@@ -22,7 +22,7 @@ export default function StartNode({ id, data }: Props) {
   const isActive = selectedId === id;
 
   return (
-    <div className="relative pointer-events-auto flex min-w-[180px] max-w-[180px] h-[52px] rounded-lg border shadow-sm bg-white overflow-hidden">
+    <div className="relative pointer-events-auto flex min-w-[180px] max-w-[180px] h-[52px] rounded-lg border shadow-sm bg-white">
       {/* Actions */}
       {isActive && (
         <div className="absolute -right-11 top-1/2 -translate-y-1/2 flex flex-col gap-2 z-50">
