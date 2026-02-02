@@ -17,20 +17,24 @@ import ReactFlow, {
 
 import WorkflowLayout from "@/components/WorkflowLayout";
 import Sidebar from "@/components/Sidebar";
-import NodeSettings from "@/components/NodeSettings";
 
 import { useWorkflowStore } from "@/store/workflowStore";
 
 export default function WorkflowPage() {
-  const nodes = useWorkflowStore((s) => s.workflow.nodes);
-  const edges = useWorkflowStore((s) => s.workflow.edges);
+  const workflow = useWorkflowStore((s) => s.workflow);
 
   const onNodesChange = useWorkflowStore((s) => s.onNodesChange);
   const onEdgesChange = useWorkflowStore((s) => s.onEdgesChange);
 
   const addStoreEdge = useWorkflowStore((s) => s.addEdge);
   const selectNode = useWorkflowStore((s) => s.selectNode);
-  const selectedNodeId = useWorkflowStore((s) => s.selectedNodeId);
+
+  /* Prevent empty nodes */
+  const nodes = workflow.nodes.length ? workflow.nodes : [];
+
+  const edges = workflow.edges;
+
+  /* Connect */
 
   const onConnect = useCallback(
     (params: Connection) => {
@@ -43,16 +47,17 @@ export default function WorkflowPage() {
     [addStoreEdge],
   );
 
-  const onNodeClick: NodeMouseHandler = useCallback(
-    (_, node: Node) => {
-      selectNode(node.id);
-    },
-    [selectNode],
-  );
+  /* Select */
+
+  const onNodeClick: NodeMouseHandler = (_, node: Node) => {
+    selectNode(node.id);
+  };
 
   const onPaneClick = useCallback(() => {
     selectNode(null);
   }, [selectNode]);
+
+  /* Node Types */
 
   const nodeTypes = {
     start: StartNode,
@@ -62,13 +67,10 @@ export default function WorkflowPage() {
 
   return (
     <ReactFlowProvider>
-      <WorkflowLayout
-        sidebar={<Sidebar />}
-        rightPanel={selectedNodeId ? <NodeSettings /> : null}
-      >
+      <WorkflowLayout sidebar={<Sidebar />} rightPanel={null}>
         <ReactFlow
           nodeTypes={nodeTypes}
-          nodes={nodes}
+          nodes={nodes} // ✅ controlled
           edges={edges}
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}

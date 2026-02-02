@@ -36,6 +36,9 @@ export type WorkflowJSON = {
 };
 
 type WorkflowState = {
+  deleteNode: (id: string) => void;
+  duplicateNode: (id: string) => void;
+
   workflow: WorkflowJSON;
 
   selectedNodeId: string | null;
@@ -250,6 +253,53 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => {
       });
 
       saveWorkflow(workflow);
+    },
+
+    deleteNode: (id) => {
+      set((state) => {
+        const nodes = state.workflow.nodes.filter((n) => n.id !== id);
+
+        const edges = state.workflow.edges.filter(
+          (e) => e.source !== id && e.target !== id,
+        );
+
+        return {
+          workflow: {
+            ...state.workflow,
+            nodes,
+            edges,
+          },
+          selectedNodeId: null,
+        };
+      });
+
+      persist();
+    },
+
+    duplicateNode: (id) => {
+      set((state) => {
+        const node = state.workflow.nodes.find((n) => n.id === id);
+
+        if (!node) return state;
+
+        const newNode = {
+          ...node,
+          id: crypto.randomUUID(),
+          position: {
+            x: node.position.x + 40,
+            y: node.position.y + 40,
+          },
+        };
+
+        return {
+          workflow: {
+            ...state.workflow,
+            nodes: [...state.workflow.nodes, newNode],
+          },
+        };
+      });
+
+      persist();
     },
   };
 });
