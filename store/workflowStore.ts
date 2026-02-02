@@ -8,9 +8,7 @@ import {
   applyEdgeChanges,
 } from "reactflow";
 
-/* ----------------------------- */
-/* Types */
-/* ----------------------------- */
+/* ---------------- Types ---------------- */
 
 type Position = {
   x: number;
@@ -21,16 +19,23 @@ type NodeData = {
   label?: string;
   email?: string;
   approver?: string;
+  nodeType?: string;
 };
 
-type WorkflowSnapshot = {
+type WorkflowMeta = {
+  version: string;
+  createdBy: string;
+  updatedAt: string;
+};
+
+export type WorkflowJSON = {
   nodes: Node<NodeData>[];
   edges: Edge[];
+  meta: WorkflowMeta;
 };
 
 type WorkflowState = {
-  nodes: Node<NodeData>[];
-  edges: Edge[];
+  workflow: WorkflowJSON;
 
   selectedNodeId: string | null;
   isLeftOpen: boolean;
@@ -47,108 +52,117 @@ type WorkflowState = {
   addEdge: (edge: Edge) => void;
 
   updateNodeData: (id: string, data: Partial<NodeData>) => void;
+
+  setWorkflow: (workflow: WorkflowJSON) => void;
 };
 
-/* ----------------------------- */
-/* Constants */
-/* ----------------------------- */
+/* ---------------- Constants ---------------- */
 
-const STORAGE_KEY = "workflow-builder:v1";
+const STORAGE_KEY = "workflow-builder:json:v1";
 
-/* ----------------------------- */
-/* Helpers */
-/* ----------------------------- */
+/* ---------------- Helpers ---------------- */
 
-function loadFromStorage(): WorkflowSnapshot | null {
+function loadWorkflow(): WorkflowJSON | null {
   if (typeof window === "undefined") return null;
 
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-
     if (!raw) return null;
 
-    return JSON.parse(raw) as WorkflowSnapshot;
+    return JSON.parse(raw) as WorkflowJSON;
   } catch {
     return null;
   }
 }
 
-function saveToStorage(snapshot: WorkflowSnapshot): void {
+function saveWorkflow(workflow: WorkflowJSON): void {
   if (typeof window === "undefined") return;
 
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(workflow));
   } catch {
-    // silently fail (quota / private mode etc.)
+    //
   }
 }
 
-/* ----------------------------- */
-/* Initial Data */
-/* ----------------------------- */
+function createEmptyWorkflow(): WorkflowJSON {
+  return {
+    nodes: [
+      {
+        id: "start",
+        type: "default",
+        position: { x: 250, y: 100 },
+        data: {
+          label: "Start",
+          nodeType: "start",
+        },
+      },
+    ],
 
-const defaultNodes: Node<NodeData>[] = [
-  {
-    id: "1",
-    type: "default",
-    position: { x: 250, y: 100 },
-    data: { label: "Start" },
-  },
-];
+    edges: [],
 
-const defaultEdges: Edge[] = [];
+    meta: {
+      version: "1.0.0",
+      createdBy: "Workflow Builder",
+      updatedAt: new Date().toISOString(),
+    },
+  };
+}
 
-/* ----------------------------- */
-/* Store */
-/* ----------------------------- */
+/* ---------------- Store ---------------- */
 
 export const useWorkflowStore = create<WorkflowState>((set, get) => {
-  /* Load persisted workflow */
-  const saved = loadFromStorage();
+  const saved = loadWorkflow();
 
-  const initialNodes = saved?.nodes ?? defaultNodes;
-  const initialEdges = saved?.edges ?? defaultEdges;
+  const initialWorkflow = saved ?? createEmptyWorkflow();
 
-  /* Persist helper */
   const persist = (): void => {
-    const { nodes, edges } = get();
+    const workflow = get().workflow;
 
-    saveToStorage({
-      nodes,
-      edges,
+    saveWorkflow({
+      ...workflow,
+      meta: {
+        ...workflow.meta,
+        updatedAt: new Date().toISOString(),
+      },
     });
   };
 
   return {
-    nodes: initialNodes,
-    edges: initialEdges,
+    workflow: initialWorkflow,
 
     selectedNodeId: null,
     isLeftOpen: true,
 
-    /* ----------------------------- */
-    /* ReactFlow handlers */
-    /* ----------------------------- */
+    /* -------- ReactFlow -------- */
 
     onNodesChange: (changes) => {
-      set({
-        nodes: applyNodeChanges(changes, get().nodes),
-      });
+      const nodes = applyNodeChanges(changes, get().workflow.nodes);
+
+      set((state) => ({
+        workflow: {
+          ...state.workflow,
+          nodes,
+        },
+      }));
 
       persist();
     },
 
     onEdgesChange: (changes) => {
-      set({
-        edges: applyEdgeChanges(changes, get().edges),
-      });
+      const edges = applyEdgeChanges(changes, get().workflow.edges);
+
+      set((state) => ({
+        workflow: {
+          ...state.workflow,
+          edges,
+        },
+      }));
 
       persist();
     },
 
-    /* ----------------------------- */
-    /* UI state */
-    /* ----------------------------- */
+    /* -------- UI -------- */
 
     selectNode: (id) => {
       set({ selectedNodeId: id });
@@ -162,51 +176,74 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => {
       set({ isLeftOpen: false });
     },
 
-    /* ----------------------------- */
-    /* Workflow actions */
-    /* ----------------------------- */
+    /* -------- Workflow -------- */
 
     addNode: (type, position) => {
       const newNode: Node<NodeData> = {
         id: crypto.randomUUID(),
         type: "default",
         position: position ?? { x: 0, y: 0 },
+
         data: {
           label: type,
+          nodeType: type.toLowerCase(),
         },
       };
 
-      set({
-        nodes: [...get().nodes, newNode],
-      });
+      set((state) => ({
+        workflow: {
+          ...state.workflow,
+          nodes: [...state.workflow.nodes, newNode],
+        },
+      }));
 
       persist();
     },
 
     addEdge: (edge) => {
-      set({
-        edges: [...get().edges, edge],
-      });
+      set((state) => ({
+        workflow: {
+          ...state.workflow,
+          edges: [...state.workflow.edges, edge],
+        },
+      }));
 
       persist();
     },
 
     updateNodeData: (id, data) => {
-      set({
-        nodes: get().nodes.map((node) =>
-          node.id === id
-            ? {
-                ...node,
-                data: {
-                  ...node.data,
-                  ...data,
-                },
-              }
-            : node,
-        ),
-      });
+      set((state) => ({
+        workflow: {
+          ...state.workflow,
+
+          nodes: state.workflow.nodes.map((node) =>
+            node.id === id
+              ? {
+                  ...node,
+                  data: {
+                    ...node.data,
+                    ...data,
+                  },
+                }
+              : node,
+          ),
+        },
+      }));
 
       persist();
+    },
+
+    /* -------- Import -------- */
+
+    setWorkflow: (workflow) => {
+      localStorage.removeItem(STORAGE_KEY);
+
+      set({
+        workflow,
+        selectedNodeId: null,
+      });
+
+      saveWorkflow(workflow);
     },
   };
 });

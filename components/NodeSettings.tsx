@@ -6,7 +6,7 @@ import { useWorkflowStore } from "@/store/workflowStore";
 
 export default function NodeSettings() {
   const selectedId = useWorkflowStore((s) => s.selectedNodeId);
-  const nodes = useWorkflowStore((s) => s.nodes);
+  const nodes = useWorkflowStore((s) => s.workflow.nodes);
   const selectNode = useWorkflowStore((s) => s.selectNode);
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData);
 

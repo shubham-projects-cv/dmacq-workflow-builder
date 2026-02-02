@@ -1,14 +1,23 @@
 "use client";
 
-import { X } from "lucide-react";
+import { X, Download, Upload } from "lucide-react";
 import { useReactFlow } from "reactflow";
-import { useWorkflowStore } from "@/store/workflowStore";
+import { useRef } from "react";
+
+import { useWorkflowStore, WorkflowJSON } from "@/store/workflowStore";
 
 export default function Sidebar() {
   const addNode = useWorkflowStore((s) => s.addNode);
   const closeLeft = useWorkflowStore((s) => s.closeLeft);
 
+  const workflow = useWorkflowStore((s) => s.workflow);
+  const setWorkflow = useWorkflowStore((s) => s.setWorkflow);
+
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
   const { getViewport, getZoom } = useReactFlow();
+
+  /* -------- Add Node -------- */
 
   const handleAdd = (type: string) => {
     const viewport = getViewport();
@@ -18,6 +27,53 @@ export default function Sidebar() {
     const centerY = (-viewport.y + window.innerHeight / 2) / zoom;
 
     addNode(type, { x: centerX, y: centerY });
+  };
+
+  /* -------- Export -------- */
+
+  const handleExport = (): void => {
+    const data = JSON.stringify(workflow, null, 2);
+
+    const blob = new Blob([data], {
+      type: "application/json",
+    });
+
+    const url = URL.createObjectURL(blob);
+
+    const a = document.createElement("a");
+
+    a.href = url;
+    a.download = "workflow.json";
+
+    a.click();
+
+    URL.revokeObjectURL(url);
+  };
+
+  /* -------- Import -------- */
+
+  const handleImportClick = (): void => {
+    fileInputRef.current?.click();
+  };
+
+  const handleImportFile = (e: React.ChangeEvent<HTMLInputElement>): void => {
+    const file = e.target.files?.[0];
+
+    if (!file) return;
+
+    const reader = new FileReader();
+
+    reader.onload = () => {
+      try {
+        const json = JSON.parse(reader.result as string) as WorkflowJSON;
+
+        setWorkflow(json);
+      } catch {
+        alert("Invalid workflow JSON");
+      }
+    };
+
+    reader.readAsText(file);
   };
 
   return (
@@ -31,8 +87,8 @@ export default function Sidebar() {
         </button>
       </div>
 
-      {/* Buttons */}
-      <div className="space-y-3">
+      {/* Add Nodes */}
+      <div className="space-y-3 mb-6">
         <button
           onClick={() => handleAdd("Start")}
           className="w-full border rounded px-3 py-2 hover:bg-gray-100"
@@ -53,6 +109,33 @@ export default function Sidebar() {
         >
           End
         </button>
+      </div>
+
+      {/* Import / Export */}
+      <div className="space-y-3 mt-auto">
+        <button
+          onClick={handleExport}
+          className="w-full border rounded px-3 py-2 flex items-center justify-center gap-2 hover:bg-gray-100"
+        >
+          <Download size={16} />
+          Export JSON
+        </button>
+
+        <button
+          onClick={handleImportClick}
+          className="w-full border rounded px-3 py-2 flex items-center justify-center gap-2 hover:bg-gray-100"
+        >
+          <Upload size={16} />
+          Import JSON
+        </button>
+
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".json"
+          hidden
+          onChange={handleImportFile}
+        />
       </div>
     </div>
   );

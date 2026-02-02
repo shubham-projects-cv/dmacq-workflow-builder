@@ -18,8 +18,8 @@ import NodeSettings from "@/components/NodeSettings";
 import { useWorkflowStore } from "@/store/workflowStore";
 
 export default function WorkflowPage() {
-  const nodes = useWorkflowStore((s) => s.nodes);
-  const edges = useWorkflowStore((s) => s.edges);
+  const nodes = useWorkflowStore((s) => s.workflow.nodes);
+  const edges = useWorkflowStore((s) => s.workflow.edges);
 
   const onNodesChange = useWorkflowStore((s) => s.onNodesChange);
   const onEdgesChange = useWorkflowStore((s) => s.onEdgesChange);
