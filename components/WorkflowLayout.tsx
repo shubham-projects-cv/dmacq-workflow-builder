@@ -4,6 +4,8 @@ import { ReactNode } from "react";
 import { Plus } from "lucide-react";
 import { useWorkflowStore } from "@/store/workflowStore";
 
+const TOP_OFFSET = 64; // Navbar height
+
 export default function WorkflowLayout({
   sidebar,
   children,
@@ -17,13 +19,27 @@ export default function WorkflowLayout({
   const toggleLeft = useWorkflowStore((s) => s.toggleLeft);
 
   return (
-    <div className="h-screen w-screen flex overflow-hidden relative bg-white">
-      {/* Left Sidebar */}
-      {isLeftOpen && (
-        <div className="w-64 border-r bg-white text-gray-900">{sidebar}</div>
-      )}
+    <div
+      className="relative w-screen bg-white overflow-hidden"
+      style={{
+        height: `calc(100vh - ${TOP_OFFSET}px)`,
+        marginTop: TOP_OFFSET,
+      }}
+    >
+      {/* ================= SIDEBAR ================= */}
+      <div
+        className={`
+          absolute left-0 top-0 z-40
+          w-64 h-full
+          bg-white border-r
+          transition-transform duration-300
+          ${isLeftOpen ? "translate-x-0" : "-translate-x-full"}
+        `}
+      >
+        {sidebar}
+      </div>
 
-      {/* Reopen Button */}
+      {/* ================= OPEN BTN ================= */}
       {!isLeftOpen && (
         <button
           onClick={toggleLeft}
@@ -33,12 +49,14 @@ export default function WorkflowLayout({
         </button>
       )}
 
-      {/* Canvas */}
-      <div className="flex-1 relative">{children}</div>
+      {/* ================= CANVAS ================= */}
+      <div className="w-full h-full relative">{children}</div>
 
-      {/* Right Panel */}
+      {/* ================= RIGHT PANEL ================= */}
       {rightPanel && (
-        <div className="w-72 border-l bg-white text-gray-900">{rightPanel}</div>
+        <div className="absolute top-0 right-0 h-full w-72 border-l bg-white z-40">
+          {rightPanel}
+        </div>
       )}
     </div>
   );
