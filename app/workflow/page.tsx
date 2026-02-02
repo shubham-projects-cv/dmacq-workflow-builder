@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useRef } from "react";
+import React, { useCallback, useRef, useState } from "react";
 
 import ReactFlow, {
   Controls,
@@ -14,6 +14,7 @@ import ReactFlow, {
 import StartNode from "@/components/nodes/StartNode";
 import ApprovalNode from "@/components/nodes/ApprovalNode";
 import EndNode from "@/components/nodes/EndNode";
+import EmailNode from "@/components/nodes/EmailNode";
 
 import DeletableEdge from "@/components/edges/DeletableEdge";
 
@@ -22,6 +23,46 @@ import Sidebar from "@/components/Sidebar";
 import NodeSettings from "@/components/NodeSettings";
 
 import { useWorkflowStore } from "@/store/workflowStore";
+
+/* ================= Condition Picker ================= */
+
+function ConditionPicker({
+  x,
+  y,
+  onSelect,
+}: {
+  x: number;
+  y: number;
+  onSelect: (v: "approve" | "deny") => void;
+}) {
+  return (
+    <div
+      style={{
+        position: "fixed",
+        top: y,
+        left: x,
+        zIndex: 1000,
+      }}
+      className="bg-white border rounded shadow p-2 flex gap-2"
+    >
+      <button
+        onClick={() => onSelect("approve")}
+        className="px-3 py-1 rounded bg-green-500 text-white text-sm"
+      >
+        Approve
+      </button>
+
+      <button
+        onClick={() => onSelect("deny")}
+        className="px-3 py-1 rounded bg-red-500 text-white text-sm"
+      >
+        Deny
+      </button>
+    </div>
+  );
+}
+
+/* ================= Page ================= */
 
 export default function WorkflowPage() {
   const nodes = useWorkflowStore((s) => s.workflow.nodes);
@@ -39,26 +80,83 @@ export default function WorkflowPage() {
   const closeSettings = useWorkflowStore((s) => s.closeSettings);
   const settingsId = useWorkflowStore((s) => s.settingsNodeId);
 
-  /* ✅ ReactFlow Instance */
+  /* ================= ReactFlow ================= */
+
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const reactFlowInstance = useRef<ReactFlowInstance | null>(null);
 
+  /* ================= Condition ================= */
+
+  const [pendingConnection, setPendingConnection] =
+    useState<Connection | null>(null);
+
+  const [pickerPos, setPickerPos] = useState({ x: 0, y: 0 });
+
+  /* ================= Add Node In Viewport ================= */
+
+  const addNodeInView = useCallback(
+    (type: string) => {
+      if (!reactFlowWrapper.current || !reactFlowInstance.current) return;
+
+      const bounds = reactFlowWrapper.current.getBoundingClientRect();
+
+      const center = reactFlowInstance.current.screenToFlowPosition({
+        x: bounds.left + bounds.width / 2,
+        y: bounds.top + bounds.height / 2,
+      });
+
+      addNode(type, center);
+    },
+    [addNode],
+  );
+
+  /* ================= Connect ================= */
+
   const onConnect = useCallback(
     (params: Connection) => {
+      const sourceNode = nodes.find((n) => n.id === params.source);
+
+      if (sourceNode?.type === "approval") {
+        setPendingConnection(params);
+
+        setPickerPos({
+          x: window.innerWidth / 2 - 60,
+          y: window.innerHeight / 2 - 30,
+        });
+
+        return;
+      }
+
       const e = addEdge(params, []);
 
       if (e.length) addStoreEdge(e[0]);
     },
-    [addStoreEdge],
+    [addStoreEdge, nodes],
   );
 
-  /* ✅ Allow Drop */
+  const handleConditionSelect = (v: "approve" | "deny") => {
+    if (!pendingConnection) return;
+
+    const e = addEdge(
+      {
+        ...pendingConnection,
+        data: { condition: v },
+      },
+      [],
+    );
+
+    if (e.length) addStoreEdge(e[0]);
+
+    setPendingConnection(null);
+  };
+
+  /* ================= Drag ================= */
+
   const onDragOver = useCallback((event: React.DragEvent) => {
     event.preventDefault();
     event.dataTransfer.dropEffect = "move";
   }, []);
 
-  /* ✅ Drop Handler */
   const onDrop = useCallback(
     (event: React.DragEvent) => {
       event.preventDefault();
@@ -81,10 +179,13 @@ export default function WorkflowPage() {
     [addNode],
   );
 
+  /* ================= Types ================= */
+
   const nodeTypes = {
     start: StartNode,
     approval: ApprovalNode,
     end: EndNode,
+    email: EmailNode,
   };
 
   const edgeTypes = {
@@ -99,10 +200,9 @@ export default function WorkflowPage() {
   return (
     <ReactFlowProvider>
       <WorkflowLayout
-        sidebar={<Sidebar />}
+        sidebar={<Sidebar onAddNode={addNodeInView} />}
         rightPanel={settingsId ? <NodeSettings /> : null}
       >
-        {/* ✅ Wrapper Needed for Drop */}
         <div
           ref={reactFlowWrapper}
           className="w-full h-full"
@@ -118,27 +218,19 @@ export default function WorkflowPage() {
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
             onInit={(rf) => (reactFlowInstance.current = rf)}
-            selectNodesOnDrag={false}
-            elementsSelectable
-            onNodeClick={(_, node) => {
-              selectNode(node.id);
-              selectEdge(null);
-            }}
-            onEdgeClick={(_, edge) => {
-              selectEdge(edge.id);
-              selectNode(null);
-              closeSettings();
-            }}
-            onPaneClick={() => {
-              selectNode(null);
-              selectEdge(null);
-              closeSettings();
-            }}
             fitView
           >
             <Controls />
             <Background />
           </ReactFlow>
+
+          {pendingConnection && (
+            <ConditionPicker
+              x={pickerPos.x}
+              y={pickerPos.y}
+              onSelect={handleConditionSelect}
+            />
+          )}
         </div>
       </WorkflowLayout>
     </ReactFlowProvider>

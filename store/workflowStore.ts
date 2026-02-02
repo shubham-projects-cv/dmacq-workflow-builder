@@ -24,6 +24,10 @@ type NodeData = {
   nodeType?: string;
 };
 
+type EdgeData = {
+  condition?: "approve" | "deny";
+};
+
 type WorkflowMeta = {
   version: string;
   createdBy: string;
@@ -32,18 +36,16 @@ type WorkflowMeta = {
 
 export type WorkflowJSON = {
   nodes: Node<NodeData>[];
-  edges: Edge[];
+  edges: Edge<EdgeData>[];
   meta: WorkflowMeta;
 };
 
 type WorkflowState = {
   workflow: WorkflowJSON;
 
-  // ✅ Selection
   activeNodeId: string | null;
   activeEdgeId: string | null;
 
-  // ✅ Settings panel
   settingsNodeId: string | null;
 
   isLeftOpen: boolean;
@@ -69,7 +71,7 @@ type WorkflowState = {
   /* Workflow */
 
   addNode: (type: string, pos?: Position) => void;
-  addEdge: (edge: Edge) => void;
+  addEdge: (edge: Edge<EdgeData>) => void;
 
   deleteNode: (id: string) => void;
   deleteEdge: (id: string) => void;
@@ -77,6 +79,8 @@ type WorkflowState = {
   duplicateNode: (id: string) => void;
 
   updateNodeData: (id: string, data: Partial<NodeData>) => void;
+
+  updateEdgeData: (id: string, data: Partial<EdgeData>) => void;
 
   setWorkflow: (wf: WorkflowJSON) => void;
 };
@@ -153,8 +157,6 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => {
 
   return {
     workflow: initial,
-
-    /* Selection */
 
     activeNodeId: null,
     activeEdgeId: null,
@@ -342,6 +344,28 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => {
                   },
                 }
               : n,
+          ),
+        },
+      }));
+
+      persist();
+    },
+
+    updateEdgeData: (id, data) => {
+      set((s) => ({
+        workflow: {
+          ...s.workflow,
+
+          edges: s.workflow.edges.map((e) =>
+            e.id === id
+              ? {
+                  ...e,
+                  data: {
+                    ...e.data,
+                    ...data,
+                  },
+                }
+              : e,
           ),
         },
       }));

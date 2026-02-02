@@ -1,20 +1,41 @@
 "use client";
 
-import { X, Upload, Download } from "lucide-react";
+import {
+  X,
+  Upload,
+  Download,
+  Mail,
+  FileText,
+  CheckCircle,
+  Square,
+} from "lucide-react";
 import { useRef } from "react";
 
 import { useWorkflowStore } from "@/store/workflowStore";
 
-export default function Sidebar() {
+/* ================= NODE CONFIG ================= */
+
+const NODE_LIST = [
+  { type: "Start", label: "Start", icon: FileText },
+  { type: "Approval", label: "Approval", icon: CheckCircle },
+  { type: "End", label: "End", icon: Square },
+  { type: "Email", label: "Email", icon: Mail },
+];
+
+export default function Sidebar({
+  onAddNode,
+}: {
+  onAddNode: (type: string) => void;
+}) {
   const closeLeft = useWorkflowStore((s) => s.closeLeft);
 
   const workflow = useWorkflowStore((s) => s.workflow);
   const setWorkflow = useWorkflowStore((s) => s.setWorkflow);
-  const addNode = useWorkflowStore((s) => s.addNode);
 
   const fileRef = useRef<HTMLInputElement>(null);
 
   /* ================= DRAG ================= */
+
   const onDragStart = (
     event: React.DragEvent<HTMLDivElement>,
     nodeType: string,
@@ -23,13 +44,8 @@ export default function Sidebar() {
     event.dataTransfer.effectAllowed = "move";
   };
 
-  /* ================= CLICK ADD ================= */
-  const handleAdd = (type: string) => {
-    // Add to center
-    addNode(type, { x: 200, y: 200 });
-  };
-
   /* ================= EXPORT ================= */
+
   const handleExport = () => {
     const data = JSON.stringify(workflow, null, 2);
 
@@ -48,6 +64,7 @@ export default function Sidebar() {
   };
 
   /* ================= IMPORT ================= */
+
   const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
 
@@ -76,8 +93,9 @@ export default function Sidebar() {
   };
 
   return (
-    <div className="h-full flex flex-col bg-white text-gray-900 opacity-100 p-4">
-      {/* ================= HEADER ================= */}
+    <div className="h-full flex flex-col bg-white text-gray-900 p-4">
+      {/* HEADER */}
+
       <div className="border-b flex items-center justify-between mb-5 pb-3">
         <h2 className="font-semibold text-lg">Nodes</h2>
 
@@ -86,22 +104,30 @@ export default function Sidebar() {
         </button>
       </div>
 
-      {/* ================= LIST ================= */}
+      {/* LIST */}
+
       <div className="flex-1 overflow-y-auto space-y-3">
-        {["Start", "Approval", "End"].map((type) => (
-          <div
-            key={type}
-            draggable
-            onDragStart={(e) => onDragStart(e, type)}
-            onClick={() => handleAdd(type)}
-            className="cursor-pointer border rounded px-3 py-2 hover:bg-gray-100 active:bg-gray-200"
-          >
-            {type}
-          </div>
-        ))}
+        {NODE_LIST.map((node) => {
+          const Icon = node.icon;
+
+          return (
+            <div
+              key={node.type}
+              draggable
+              onDragStart={(e) => onDragStart(e, node.type)}
+              onClick={() => onAddNode(node.type)}
+              className="cursor-pointer border rounded px-3 py-2 hover:bg-gray-100 active:bg-gray-200 flex items-center gap-2 text-sm font-medium"
+            >
+              <Icon size={16} className="text-gray-600" />
+
+              {node.label}
+            </div>
+          );
+        })}
       </div>
 
-      {/* ================= FOOTER ================= */}
+      {/* FOOTER */}
+
       <div className="space-y-3">
         <input
           ref={fileRef}
