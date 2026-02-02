@@ -1,25 +1,19 @@
 "use client";
 
 import { X } from "lucide-react";
-import { useReactFlow } from "reactflow";
 
 import { useWorkflowStore } from "@/store/workflowStore";
 
 export default function Sidebar() {
-  const addNode = useWorkflowStore((s) => s.addNode);
   const closeLeft = useWorkflowStore((s) => s.closeLeft);
 
-  const { getViewport, getZoom } = useReactFlow();
-
-  const handleAdd = (type: string) => {
-    const viewport = getViewport();
-    const zoom = getZoom();
-
-    const x = (-viewport.x + window.innerWidth / 2) / zoom;
-
-    const y = (-viewport.y + window.innerHeight / 2) / zoom;
-
-    addNode(type, { x, y });
+  /* ✅ Drag Handler */
+  const onDragStart = (
+    event: React.DragEvent<HTMLDivElement>,
+    nodeType: string,
+  ) => {
+    event.dataTransfer.setData("application/reactflow", nodeType);
+    event.dataTransfer.effectAllowed = "move";
   };
 
   return (
@@ -33,28 +27,31 @@ export default function Sidebar() {
         </button>
       </div>
 
-      {/* Buttons */}
+      {/* Draggable Nodes */}
       <div className="space-y-3">
-        <button
-          onClick={() => handleAdd("Start")}
-          className="w-full border rounded px-3 py-2 hover:bg-gray-100"
+        <div
+          draggable
+          onDragStart={(e) => onDragStart(e, "Start")}
+          className="cursor-grab border rounded px-3 py-2 hover:bg-gray-100"
         >
           Start
-        </button>
+        </div>
 
-        <button
-          onClick={() => handleAdd("Approval")}
-          className="w-full border rounded px-3 py-2 hover:bg-gray-100"
+        <div
+          draggable
+          onDragStart={(e) => onDragStart(e, "Approval")}
+          className="cursor-grab border rounded px-3 py-2 hover:bg-gray-100"
         >
           Approval
-        </button>
+        </div>
 
-        <button
-          onClick={() => handleAdd("End")}
-          className="w-full border rounded px-3 py-2 hover:bg-gray-100"
+        <div
+          draggable
+          onDragStart={(e) => onDragStart(e, "End")}
+          className="cursor-grab border rounded px-3 py-2 hover:bg-gray-100"
         >
           End
-        </button>
+        </div>
       </div>
     </div>
   );
