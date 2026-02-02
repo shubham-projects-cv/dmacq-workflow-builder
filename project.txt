@@ -329,7 +329,15 @@ export default function DeletableEdge({
 "use client";
 
 import { Handle, Position, NodeProps } from "reactflow";
-import { CheckCircle, Trash2, Copy, Settings } from "lucide-react";
+import {
+  CheckCircle,
+  Trash2,
+  Copy,
+  Settings,
+  Plus,
+  Pencil,
+  Mail,
+} from "lucide-react";
 
 import { useWorkflowStore } from "@/store/workflowStore";
 
@@ -338,11 +346,13 @@ export default function ApprovalNode({ id, data, selected }: NodeProps) {
   const duplicateNode = useWorkflowStore((s) => s.duplicateNode);
   const openSettings = useWorkflowStore((s) => s.openSettings);
 
+  const email = data?.email;
+
   return (
-    <div className="relative flex min-w-[180px] max-w-[180px] h-[52px] rounded-lg border shadow-sm bg-white">
-      {/* ✅ Action Buttons (Only When Selected) */}
+    <div className="relative flex min-w-[210px] max-w-[210px] h-[70px] rounded-lg border shadow-sm bg-white">
+      {/* ================= ACTION BUTTONS ================= */}
       {selected && (
-        <div className="absolute -right-11 top-1/2 -translate-y-1/2 flex flex-col gap-2 z-50">
+        <div className="absolute -right-12 top-1/2 -translate-y-1/2 flex flex-col gap-2 z-50">
           <button
             onClick={() => openSettings(id)}
             className="p-2 bg-blue-500 text-white rounded-full"
@@ -366,23 +376,57 @@ export default function ApprovalNode({ id, data, selected }: NodeProps) {
         </div>
       )}
 
-      {/* Icon */}
+      {/* ================= ICON ================= */}
       <div className="bg-emerald-600 px-3 flex items-center justify-center">
         <CheckCircle className="text-white" size={18} />
       </div>
 
-      {/* Content */}
-      <div className="p-2 flex-1">
-        <div className="text-sm font-semibold truncate">
+      {/* ================= CONTENT ================= */}
+      <div className="p-2 flex-1 text-[11px] overflow-hidden">
+        {/* Title */}
+        <div className="font-semibold truncate leading-tight">
           {data.label || "Approval"}
         </div>
 
-        {data.approver && (
-          <div className="text-[11px] text-gray-500">👤 {data.approver}</div>
-        )}
+        {/* ================= EMAIL SECTION ================= */}
+        <div className="mt-1 flex items-center gap-1 overflow-hidden">
+          {!email ? (
+            <>
+              <span className="text-gray-500 truncate text-[10px]">
+                No approval email
+              </span>
+
+              {/* Only + opens */}
+              <button
+                onClick={() => openSettings(id)}
+                className="text-blue-600 hover:text-blue-800 ml-auto"
+                title="Add Email"
+              >
+                <Plus size={12} />
+              </button>
+            </>
+          ) : (
+            <>
+              <Mail size={12} className="shrink-0 text-gray-500" />
+
+              <span className="truncate max-w-[130px] text-[11px] text-gray-600">
+                {email}
+              </span>
+
+              {/* Edit */}
+              <button
+                onClick={() => openSettings(id)}
+                className="text-blue-600 hover:text-blue-800 ml-auto shrink-0"
+                title="Edit Email"
+              >
+                <Pencil size={12} />
+              </button>
+            </>
+          )}
+        </div>
       </div>
 
-      {/* Handles */}
+      {/* ================= HANDLES ================= */}
       <Handle type="target" position={Position.Top} />
       <Handle type="source" position={Position.Bottom} />
     </div>
@@ -505,7 +549,7 @@ export default function StartNode({ id, data, selected }: NodeProps) {
 ----------------
 "use client";
 
-import { X } from "lucide-react";
+import { X, Mail, Type, User } from "lucide-react";
 import { ChangeEvent } from "react";
 
 import { useWorkflowStore } from "@/store/workflowStore";
@@ -531,45 +575,58 @@ export default function NodeSettings() {
     };
 
   return (
-    <div className="w-72 bg-white border-l p-4 h-full">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="font-semibold">Node Settings</h3>
+    <div className="h-full bg-white text-gray-900 p-4">
+      {/* ================= HEADER ================= */}
+      <div className="flex items-center justify-between mb-5 border-b pb-3">
+        <h3 className="font-semibold text-lg">Node Settings</h3>
 
         <button onClick={close}>
           <X size={18} />
         </button>
       </div>
 
-      {/* Form */}
+      {/* ================= FORM ================= */}
       <div className="space-y-4 text-sm">
+        {/* LABEL */}
         <div>
-          <label className="block mb-1 font-medium">Label</label>
+          <label className="flex items-center gap-1 mb-1 font-medium">
+            <Type size={14} />
+            Label
+          </label>
 
           <input
             value={node.data?.label || ""}
             onChange={handleChange("label")}
-            className="w-full border rounded px-2 py-1"
+            className="w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
           />
         </div>
 
+        {/* EMAIL */}
         <div>
-          <label className="block mb-1 font-medium">Email</label>
+          <label className="flex items-center gap-1 mb-1 font-medium">
+            <Mail size={14} />
+            Approval Email
+          </label>
 
           <input
             value={node.data?.email || ""}
             onChange={handleChange("email")}
-            className="w-full border rounded px-2 py-1"
+            placeholder="approver@email.com"
+            className="w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
           />
         </div>
 
+        {/* APPROVER */}
         <div>
-          <label className="block mb-1 font-medium">Approver</label>
+          <label className="flex items-center gap-1 mb-1 font-medium">
+            <User size={14} />
+            Approver Name
+          </label>
 
           <input
             value={node.data?.approver || ""}
             onChange={handleChange("approver")}
-            className="w-full border rounded px-2 py-1"
+            className="w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
           />
         </div>
       </div>
@@ -657,9 +714,9 @@ export default function Sidebar() {
   };
 
   return (
-    <div className="h-full flex flex-col bg-white text-gray-900 opacity-100">
+    <div className="h-full flex flex-col bg-white text-gray-900 opacity-100 p-4">
       {/* ================= HEADER ================= */}
-      <div className="p-4 border-b flex items-center justify-between">
+      <div className="border-b flex items-center justify-between mb-5 pb-3">
         <h2 className="font-semibold text-lg">Nodes</h2>
 
         <button onClick={closeLeft}>
@@ -668,7 +725,7 @@ export default function Sidebar() {
       </div>
 
       {/* ================= LIST ================= */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-3">
+      <div className="flex-1 overflow-y-auto space-y-3">
         {["Start", "Approval", "End"].map((type) => (
           <div
             key={type}
@@ -683,7 +740,7 @@ export default function Sidebar() {
       </div>
 
       {/* ================= FOOTER ================= */}
-      <div className="border-t p-4 space-y-3">
+      <div className="space-y-3">
         <input
           ref={fileRef}
           type="file"
@@ -712,15 +769,67 @@ export default function Sidebar() {
   );
 }
 
+### ./components/TopNavbar.tsx
+----------------
+"use client";
+
+import { Undo2, Redo2, Save, Send } from "lucide-react";
+
+export default function TopNavbar() {
+  return (
+    <div className="w-full bg-white border-b shadow-sm px-3 py-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        {/* ================= LEFT ================= */}
+        <div className="flex items-center gap-2">
+          <button
+            className="flex items-center gap-1 px-2 py-1.5 border rounded hover:bg-gray-100 text-sm"
+            title="Undo"
+          >
+            <Undo2 size={16} />
+            <span className="hidden sm:inline">Undo</span>
+          </button>
+
+          <button
+            className="flex items-center gap-1 px-2 py-1.5 border rounded hover:bg-gray-100 text-sm"
+            title="Redo"
+          >
+            <Redo2 size={16} />
+            <span className="hidden sm:inline">Redo</span>
+          </button>
+        </div>
+
+        {/* ================= RIGHT ================= */}
+        <div className="flex items-center gap-2">
+          <button
+            className="flex items-center gap-1 px-2 py-1.5 border rounded hover:bg-gray-100 text-sm"
+            title="Save Draft"
+          >
+            <Save size={16} />
+            <span className="hidden sm:inline">Save Draft</span>
+          </button>
+
+          <button
+            className="flex items-center gap-1 px-3 py-1.5 bg-indigo-600 text-white rounded hover:bg-indigo-700 text-sm"
+            title="Publish"
+          >
+            <Send size={16} />
+            <span className="hidden sm:inline">Publish</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 ### ./components/WorkflowLayout.tsx
 ----------------
 "use client";
 
 import { ReactNode } from "react";
 import { Plus } from "lucide-react";
-import { useWorkflowStore } from "@/store/workflowStore";
 
-const TOP_OFFSET = 64; // Navbar height
+import { useWorkflowStore } from "@/store/workflowStore";
+import TopNavbar from "@/components/TopNavbar";
 
 export default function WorkflowLayout({
   sidebar,
@@ -735,45 +844,45 @@ export default function WorkflowLayout({
   const toggleLeft = useWorkflowStore((s) => s.toggleLeft);
 
   return (
-    <div
-      className="relative w-screen bg-white overflow-hidden"
-      style={{
-        height: `calc(100vh - ${TOP_OFFSET}px)`,
-        marginTop: TOP_OFFSET,
-      }}
-    >
-      {/* ================= SIDEBAR ================= */}
-      <div
-        className={`
-          absolute left-0 top-0 z-40
-          w-64 h-full
-          bg-white border-r
-          transition-transform duration-300
-          ${isLeftOpen ? "translate-x-0" : "-translate-x-full"}
-        `}
-      >
-        {sidebar}
-      </div>
+    <div className="w-screen h-screen flex flex-col bg-white overflow-hidden">
+      {/* ================= TOP NAV ================= */}
+      <TopNavbar />
 
-      {/* ================= OPEN BTN ================= */}
-      {!isLeftOpen && (
-        <button
-          onClick={toggleLeft}
-          className="absolute top-4 left-4 z-50 bg-white border rounded p-2 shadow hover:bg-gray-100"
+      {/* ================= MAIN AREA ================= */}
+      <div className="relative flex-1 overflow-hidden">
+        {/* ================= SIDEBAR ================= */}
+        <div
+          className={`
+            absolute left-0 top-0 z-40
+            w-72 h-full
+            bg-white border-r
+            transition-transform duration-300
+            ${isLeftOpen ? "translate-x-0" : "-translate-x-full"}
+          `}
         >
-          <Plus size={18} />
-        </button>
-      )}
-
-      {/* ================= CANVAS ================= */}
-      <div className="w-full h-full relative">{children}</div>
-
-      {/* ================= RIGHT PANEL ================= */}
-      {rightPanel && (
-        <div className="absolute top-0 right-0 h-full w-72 border-l bg-white z-40">
-          {rightPanel}
+          {sidebar}
         </div>
-      )}
+
+        {/* ================= OPEN BTN ================= */}
+        {!isLeftOpen && (
+          <button
+            onClick={toggleLeft}
+            className="absolute top-4 left-4 z-50 bg-white border rounded p-2 shadow hover:bg-gray-100"
+          >
+            <Plus size={18} />
+          </button>
+        )}
+
+        {/* ================= CANVAS ================= */}
+        <div className="w-full h-full relative">{children}</div>
+
+        {/* ================= RIGHT PANEL ================= */}
+        {rightPanel && (
+          <div className="absolute top-0 right-0 h-full w-72 bg-white text-gray-900 z-40 border-l">
+            {rightPanel}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
