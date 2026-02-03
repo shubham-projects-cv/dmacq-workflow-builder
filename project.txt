@@ -135,7 +135,7 @@ export default function Home() {
 ----------------
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useMemo } from "react";
 import { useWorkflowStream } from "@/hooks/useWorkflowStream";
 
 import ReactFlow, {
@@ -202,8 +202,6 @@ function ConditionPicker({
 /* ================= Page ================= */
 
 export default function WorkflowPage() {
-  /* ================= Mount Guard (Fix Hydration) ================= */
-
   /* ================= Mount Guard ================= */
 
   const [mounted, setMounted] = useState(false);
@@ -234,7 +232,7 @@ export default function WorkflowPage() {
 
   const STORAGE_KEY = "active-workflow";
 
-  const events = useWorkflowStream(workflowId || undefined);
+  const { events, status } = useWorkflowStream(workflowId || undefined);
 
   /* ================= ReactFlow ================= */
 
@@ -336,7 +334,7 @@ export default function WorkflowPage() {
     [addNode],
   );
 
-  /* ================= Node Types ================= */
+  /* ================= Node / Edge Types ================= */
 
   const nodeTypes = {
     start: StartNode,
@@ -349,10 +347,30 @@ export default function WorkflowPage() {
     deletable: DeletableEdge,
   };
 
-  const mappedEdges = edges.map((e) => ({
-    ...e,
-    type: "deletable",
-  }));
+  /* ================= Inject Status Into Nodes ================= */
+
+  const mappedNodes = useMemo(() => {
+    return nodes.map((n) => ({
+      ...n,
+      data: {
+        ...n.data,
+        workflowStatus: status,
+      },
+    }));
+  }, [nodes, status]);
+
+  /* ================= Inject Status Into Edges ================= */
+
+  const mappedEdges = useMemo(() => {
+    return edges.map((e) => ({
+      ...e,
+      type: "deletable",
+      data: {
+        ...e.data,
+        workflowStatus: status,
+      },
+    }));
+  }, [edges, status]);
 
   /* ================= Restore On Refresh ================= */
 
@@ -370,7 +388,7 @@ export default function WorkflowPage() {
   /* ================= Listen Publish ================= */
 
   useEffect(() => {
-    const handler = (e: CustomEvent) => {
+    const handler = (e: CustomEvent<{ workflowId: string }>) => {
       const id = e.detail.workflowId;
 
       localStorage.setItem(STORAGE_KEY, id);
@@ -389,14 +407,10 @@ export default function WorkflowPage() {
   /* ================= Cleanup On Complete ================= */
 
   useEffect(() => {
-    if (!events.length) return;
+    if (!status.completed) return;
 
-    const last = events[events.length - 1];
-
-    if (last.status === "COMPLETED") {
-      localStorage.removeItem(STORAGE_KEY);
-    }
-  }, [events]);
+    localStorage.removeItem(STORAGE_KEY);
+  }, [status.completed]);
 
   /* ================= Prevent SSR Mismatch ================= */
 
@@ -417,7 +431,7 @@ export default function WorkflowPage() {
           onDragOver={onDragOver}
         >
           <ReactFlow
-            nodes={nodes}
+            nodes={mappedNodes}
             edges={mappedEdges}
             nodeTypes={nodeTypes}
             edgeTypes={edgeTypes}
@@ -440,7 +454,7 @@ export default function WorkflowPage() {
           )}
         </div>
 
-        {/* ✅ STATUS PANEL */}
+        {/* STATUS PANEL */}
         {showStatus && workflowId && (
           <WorkflowStatusPanel
             events={events}
@@ -462,10 +476,24 @@ export default function WorkflowPage() {
 "use client";
 
 import { EdgeProps, getBezierPath } from "reactflow";
-import { Trash2 } from "lucide-react";
+import { Trash2, CheckCircle } from "lucide-react";
 import { useState } from "react";
 
 import { useWorkflowStore } from "@/store/workflowStore";
+
+/* ================= Types ================= */
+
+type WorkflowStatus = {
+  started: boolean;
+  waiting: boolean;
+  decision: "approve" | "deny" | null;
+  completed: boolean;
+};
+
+type EdgeData = {
+  condition?: "approve" | "deny";
+  workflowStatus?: WorkflowStatus;
+};
 
 /* ================= Condition Picker ================= */
 
@@ -511,7 +539,7 @@ export default function DeletableEdge({
   targetY,
   selected,
   data,
-}: EdgeProps) {
+}: EdgeProps<EdgeData>) {
   const deleteEdge = useWorkflowStore((s) => s.deleteEdge);
   const updateEdgeData = useWorkflowStore((s) => s.updateEdgeData);
 
@@ -525,13 +553,21 @@ export default function DeletableEdge({
   });
 
   const condition = data?.condition;
+  const status = data?.workflowStatus;
 
   const isApprove = condition === "approve";
   const isDeny = condition === "deny";
 
+  const isSelectedPath =
+    status !== undefined &&
+    status.decision !== null &&
+    status.decision === condition;
+
   /* Position offsets */
   const labelOffsetX = -40;
   const deleteOffsetX = condition ? 55 : 12;
+
+  const isLeftToRight = targetX > sourceX;
 
   return (
     <>
@@ -558,11 +594,11 @@ export default function DeletableEdge({
         <foreignObject
           x={cx + labelOffsetX}
           y={cy - 16}
-          width={80}
+          width={120}
           height={40}
           style={{ overflow: "visible" }}
         >
-          <div className="flex items-center justify-center">
+          <div className="flex items-center gap-1 justify-center">
             {!editing ? (
               <button
                 onClick={() => setEditing(true)}
@@ -586,11 +622,28 @@ export default function DeletableEdge({
                 onClose={() => setEditing(false)}
               />
             )}
+
+            {/* ================= STATUS CHECK ================= */}
+
+            {isSelectedPath && (
+              <CheckCircle
+                size={14}
+                className="text-green-600 absolute"
+                style={{
+                  left: isLeftToRight ? "100%" : "auto",
+                  right: isLeftToRight ? "auto" : "100%",
+                  marginLeft: isLeftToRight ? 6 : 0,
+                  marginRight: isLeftToRight ? 0 : 6,
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                }}
+              />
+            )}
           </div>
         </foreignObject>
       )}
 
-      {/* ================= DELETE (MOVED) ================= */}
+      {/* ================= DELETE ================= */}
 
       {selected && (
         <foreignObject
@@ -628,16 +681,55 @@ import {
 
 import { useWorkflowStore } from "@/store/workflowStore";
 
-export default function ApprovalNode({ id, data, selected }: NodeProps) {
+/* ================= Types ================= */
+
+type WorkflowStatus = {
+  started: boolean;
+  waiting: boolean;
+  decision: "approve" | "deny" | null;
+  completed: boolean;
+};
+
+type NodeData = {
+  label?: string;
+  email?: string;
+  workflowStatus?: WorkflowStatus;
+};
+
+export default function ApprovalNode({
+  id,
+  data,
+  selected,
+}: NodeProps<NodeData>) {
   const deleteNode = useWorkflowStore((s) => s.deleteNode);
   const duplicateNode = useWorkflowStore((s) => s.duplicateNode);
   const openSettings = useWorkflowStore((s) => s.openSettings);
 
-  const email = data?.email;
+  const status = data?.workflowStatus;
+
+  const isWaiting =
+    status !== undefined && status.waiting === true && status.decision === null;
+
+  const isChecked = status?.decision !== null;
 
   return (
-    <div className="relative flex min-w-[210px] max-w-[210px] h-[70px] rounded-lg border shadow-sm bg-white">
+    <div
+      className={`
+        relative flex min-w-[210px] max-w-[210px] h-[70px]
+        rounded-lg border shadow-sm bg-white
+        ${isWaiting ? "ring-2 ring-yellow-400 animate-pulse" : ""}
+      `}
+    >
+      {/* ================= STATUS ICON ================= */}
+
+      {isChecked && (
+        <div className="absolute -left-3 top-1/2 -translate-y-1/2 bg-green-500 rounded-full p-0.5">
+          <CheckCircle size={14} className="text-white" />
+        </div>
+      )}
+
       {/* ================= ACTION BUTTONS ================= */}
+
       {selected && (
         <div className="absolute -right-12 top-1/2 -translate-y-1/2 flex flex-col gap-2 z-50">
           <button
@@ -664,26 +756,25 @@ export default function ApprovalNode({ id, data, selected }: NodeProps) {
       )}
 
       {/* ================= ICON ================= */}
+
       <div className="bg-emerald-600 px-3 flex items-center justify-center">
         <CheckCircle className="text-white" size={18} />
       </div>
 
       {/* ================= CONTENT ================= */}
+
       <div className="p-2 flex-1 text-[11px] overflow-hidden">
-        {/* Title */}
         <div className="font-semibold truncate leading-tight">
-          {data.label || "Approval"}
+          {data?.label || "Approval"}
         </div>
 
-        {/* ================= EMAIL SECTION ================= */}
         <div className="mt-1 flex items-center gap-1 overflow-hidden">
-          {!email ? (
+          {!data?.email ? (
             <>
               <span className="text-gray-500 truncate text-[10px]">
                 No approval email
               </span>
 
-              {/* Only + opens */}
               <button
                 onClick={() => openSettings(id)}
                 className="text-blue-600 hover:text-blue-800 ml-auto"
@@ -697,10 +788,9 @@ export default function ApprovalNode({ id, data, selected }: NodeProps) {
               <Mail size={12} className="shrink-0 text-gray-500" />
 
               <span className="truncate max-w-[130px] text-[11px] text-gray-600">
-                {email}
+                {data.email}
               </span>
 
-              {/* Edit */}
               <button
                 onClick={() => openSettings(id)}
                 className="text-blue-600 hover:text-blue-800 ml-auto shrink-0"
@@ -714,6 +804,7 @@ export default function ApprovalNode({ id, data, selected }: NodeProps) {
       </div>
 
       {/* ================= HANDLES ================= */}
+
       <Handle type="target" position={Position.Top} />
       <Handle type="source" position={Position.Bottom} />
     </div>
@@ -798,18 +889,45 @@ export default function EmailNode({ id, data, selected }: NodeProps) {
 "use client";
 
 import { Handle, Position, NodeProps } from "reactflow";
-import { Square, Trash2, Copy, Settings } from "lucide-react";
+import { Square, Trash2, Copy, Settings, CheckCircle } from "lucide-react";
 
 import { useWorkflowStore } from "@/store/workflowStore";
 
-export default function EndNode({ id, data, selected }: NodeProps) {
+/* ================= Types ================= */
+
+type WorkflowStatus = {
+  started: boolean;
+  waiting: boolean;
+  decision: "approve" | "deny" | null;
+  completed: boolean;
+};
+
+type NodeData = {
+  label?: string;
+  workflowStatus?: WorkflowStatus;
+};
+
+export default function EndNode({ id, data, selected }: NodeProps<NodeData>) {
   const deleteNode = useWorkflowStore((s) => s.deleteNode);
   const duplicateNode = useWorkflowStore((s) => s.duplicateNode);
   const openSettings = useWorkflowStore((s) => s.openSettings);
 
+  const status = data?.workflowStatus;
+
+  const isChecked = status?.completed === true;
+
   return (
     <div className="relative flex items-center min-w-[180px] max-w-[180px] h-[52px] px-3 rounded-md border shadow-sm bg-white">
-      {/* ✅ Action Buttons (Only When Selected) */}
+      {/* ================= STATUS ICON ================= */}
+
+      {isChecked && (
+        <div className="absolute -left-3 top-1/2 -translate-y-1/2 bg-green-500 rounded-full p-0.5">
+          <CheckCircle size={14} className="text-white" />
+        </div>
+      )}
+
+      {/* ================= ACTION BUTTONS ================= */}
+
       {selected && (
         <div className="absolute -right-11 top-1/2 -translate-y-1/2 flex flex-col gap-2 z-50">
           <button
@@ -835,15 +953,18 @@ export default function EndNode({ id, data, selected }: NodeProps) {
         </div>
       )}
 
-      {/* Icon */}
+      {/* ================= ICON ================= */}
+
       <Square size={14} className="text-indigo-700 mr-2" fill="currentColor" />
 
-      {/* Label */}
+      {/* ================= LABEL ================= */}
+
       <span className="text-sm font-semibold truncate">
-        {data.label || "End"}
+        {data?.label || "End"}
       </span>
 
-      {/* Handle */}
+      {/* ================= HANDLE ================= */}
+
       <Handle type="target" position={Position.Top} />
     </div>
   );
@@ -854,18 +975,46 @@ export default function EndNode({ id, data, selected }: NodeProps) {
 "use client";
 
 import { Handle, Position, NodeProps } from "reactflow";
-import { FileText, Trash2, Copy, Settings } from "lucide-react";
+import { FileText, Trash2, Copy, Settings, CheckCircle } from "lucide-react";
 
 import { useWorkflowStore } from "@/store/workflowStore";
 
-export default function StartNode({ id, data, selected }: NodeProps) {
+/* ================= Types ================= */
+
+type WorkflowStatus = {
+  started: boolean;
+  waiting: boolean;
+  decision: "approve" | "deny" | null;
+  completed: boolean;
+};
+
+type NodeData = {
+  label?: string;
+  subLabel?: string;
+  workflowStatus?: WorkflowStatus;
+};
+
+export default function StartNode({ id, data, selected }: NodeProps<NodeData>) {
   const deleteNode = useWorkflowStore((s) => s.deleteNode);
   const duplicateNode = useWorkflowStore((s) => s.duplicateNode);
   const openSettings = useWorkflowStore((s) => s.openSettings);
 
+  const status = data?.workflowStatus;
+
+  const isChecked = status?.started === true;
+
   return (
     <div className="relative flex min-w-[180px] max-w-[180px] h-[52px] rounded-lg border shadow-sm bg-white">
-      {/* ✅ Use selected */}
+      {/* ================= STATUS ICON ================= */}
+
+      {isChecked && (
+        <div className="absolute -left-3 top-1/2 -translate-y-1/2 bg-green-500 rounded-full p-0.5">
+          <CheckCircle size={14} className="text-white" />
+        </div>
+      )}
+
+      {/* ================= ACTION BUTTONS ================= */}
+
       {selected && (
         <div className="absolute -right-11 top-1/2 -translate-y-1/2 flex flex-col gap-2 z-50">
           <button
@@ -891,14 +1040,20 @@ export default function StartNode({ id, data, selected }: NodeProps) {
         </div>
       )}
 
+      {/* ================= ICON ================= */}
+
       <div className="bg-orange-500 px-3 flex items-center justify-center">
         <FileText className="text-white" size={18} />
       </div>
 
+      {/* ================= CONTENT ================= */}
+
       <div className="p-2 flex-1">
-        <div className="text-[11px] text-gray-500">{data.subLabel}</div>
-        <div className="text-sm font-semibold truncate">{data.label}</div>
+        <div className="text-[11px] text-gray-500">{data?.subLabel}</div>
+        <div className="text-sm font-semibold truncate">{data?.label}</div>
       </div>
+
+      {/* ================= HANDLE ================= */}
 
       <Handle type="source" position={Position.Bottom} />
     </div>
@@ -1163,44 +1318,6 @@ export default function Sidebar({
     </div>
   );
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ### ./components/TopNavbar.tsx
 ----------------
@@ -1498,7 +1615,7 @@ export default eslintConfig;
 
 ### ./hooks/useWorkflowStream.ts
 ----------------
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 /* ================= TYPES ================= */
 
@@ -1509,9 +1626,16 @@ export type WorkflowEvent = {
   timestamp: string;
 };
 
+export type WorkflowStatusState = {
+  started: boolean;
+  waiting: boolean;
+  decision: "approve" | "deny" | null;
+  completed: boolean;
+};
+
 /* ================= STORAGE ================= */
 
-function getKey(id: string) {
+function getKey(id: string): string {
   return `workflow-events:${id}`;
 }
 
@@ -1521,20 +1645,56 @@ function load(id: string): WorkflowEvent[] {
 
     if (!raw) return [];
 
-    return JSON.parse(raw);
+    return JSON.parse(raw) as WorkflowEvent[];
   } catch {
     return [];
   }
 }
 
-function save(id: string, events: WorkflowEvent[]) {
+function save(id: string, events: WorkflowEvent[]): void {
   localStorage.setItem(getKey(id), JSON.stringify(events));
+}
+
+/* ================= STATUS DERIVER ================= */
+
+function deriveStatus(events: WorkflowEvent[]): WorkflowStatusState {
+  let started = false;
+  let waiting = false;
+  let completed = false;
+  let decision: "approve" | "deny" | null = null;
+
+  for (const e of events) {
+    if (e.status === "STARTED") {
+      started = true;
+    }
+
+    if (e.status === "WAITING") {
+      waiting = true;
+    }
+
+    if (e.status === "DECISION") {
+      if (e.message === "approve" || e.message === "deny") {
+        decision = e.message;
+      }
+    }
+
+    if (e.status === "COMPLETED") {
+      completed = true;
+    }
+  }
+
+  return {
+    started,
+    waiting,
+    decision,
+    completed,
+  };
 }
 
 /* ================= HOOK ================= */
 
 export function useWorkflowStream(workflowId?: string) {
-  /* ---------- Init From Storage ---------- */
+  /* ---------- Init ---------- */
 
   const [events, setEvents] = useState<WorkflowEvent[]>(() => {
     if (!workflowId) return [];
@@ -1544,14 +1704,13 @@ export function useWorkflowStream(workflowId?: string) {
     return load(workflowId);
   });
 
-  /* ---------- Reload When Workflow Changes ---------- */
+  /* ---------- Reload When ID Changes ---------- */
 
   useEffect(() => {
     if (!workflowId) return;
 
     const saved = load(workflowId);
 
-    // ✅ Make update async (React 19 safe)
     queueMicrotask(() => {
       setEvents(saved);
     });
@@ -1564,15 +1723,20 @@ export function useWorkflowStream(workflowId?: string) {
 
     const es = new EventSource("http://localhost:4000/stream");
 
-    es.onmessage = (e) => {
-      const data: WorkflowEvent = JSON.parse(e.data);
+    es.onmessage = (e: MessageEvent<string>) => {
+      const data = JSON.parse(e.data) as WorkflowEvent;
 
       if (data.workflowId !== workflowId) return;
 
       setEvents((prev) => {
         const updated = [...prev, data];
 
-        save(workflowId, updated);
+        // Clear storage when completed
+        if (data.status === "COMPLETED") {
+          localStorage.removeItem(getKey(workflowId));
+        } else {
+          save(workflowId, updated);
+        }
 
         return updated;
       });
@@ -1583,7 +1747,16 @@ export function useWorkflowStream(workflowId?: string) {
     };
   }, [workflowId]);
 
-  return events;
+  /* ---------- Derived Status (No State) ---------- */
+
+  const status = useMemo<WorkflowStatusState>(() => {
+    return deriveStatus(events);
+  }, [events]);
+
+  return {
+    events,
+    status,
+  };
 }
 
 ### ./next-env.d.ts
