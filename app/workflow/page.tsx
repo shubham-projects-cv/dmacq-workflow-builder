@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useMemo } from "react";
 import { useWorkflowStream } from "@/hooks/useWorkflowStream";
 
 import ReactFlow, {
@@ -67,8 +67,6 @@ function ConditionPicker({
 /* ================= Page ================= */
 
 export default function WorkflowPage() {
-  /* ================= Mount Guard (Fix Hydration) ================= */
-
   /* ================= Mount Guard ================= */
 
   const [mounted, setMounted] = useState(false);
@@ -99,7 +97,7 @@ export default function WorkflowPage() {
 
   const STORAGE_KEY = "active-workflow";
 
-  const events = useWorkflowStream(workflowId || undefined);
+  const { events, status } = useWorkflowStream(workflowId || undefined);
 
   /* ================= ReactFlow ================= */
 
@@ -201,7 +199,7 @@ export default function WorkflowPage() {
     [addNode],
   );
 
-  /* ================= Node Types ================= */
+  /* ================= Node / Edge Types ================= */
 
   const nodeTypes = {
     start: StartNode,
@@ -214,10 +212,30 @@ export default function WorkflowPage() {
     deletable: DeletableEdge,
   };
 
-  const mappedEdges = edges.map((e) => ({
-    ...e,
-    type: "deletable",
-  }));
+  /* ================= Inject Status Into Nodes ================= */
+
+  const mappedNodes = useMemo(() => {
+    return nodes.map((n) => ({
+      ...n,
+      data: {
+        ...n.data,
+        workflowStatus: status,
+      },
+    }));
+  }, [nodes, status]);
+
+  /* ================= Inject Status Into Edges ================= */
+
+  const mappedEdges = useMemo(() => {
+    return edges.map((e) => ({
+      ...e,
+      type: "deletable",
+      data: {
+        ...e.data,
+        workflowStatus: status,
+      },
+    }));
+  }, [edges, status]);
 
   /* ================= Restore On Refresh ================= */
 
@@ -235,7 +253,7 @@ export default function WorkflowPage() {
   /* ================= Listen Publish ================= */
 
   useEffect(() => {
-    const handler = (e: CustomEvent) => {
+    const handler = (e: CustomEvent<{ workflowId: string }>) => {
       const id = e.detail.workflowId;
 
       localStorage.setItem(STORAGE_KEY, id);
@@ -254,14 +272,10 @@ export default function WorkflowPage() {
   /* ================= Cleanup On Complete ================= */
 
   useEffect(() => {
-    if (!events.length) return;
+    if (!status.completed) return;
 
-    const last = events[events.length - 1];
-
-    if (last.status === "COMPLETED") {
-      localStorage.removeItem(STORAGE_KEY);
-    }
-  }, [events]);
+    localStorage.removeItem(STORAGE_KEY);
+  }, [status.completed]);
 
   /* ================= Prevent SSR Mismatch ================= */
 
@@ -282,7 +296,7 @@ export default function WorkflowPage() {
           onDragOver={onDragOver}
         >
           <ReactFlow
-            nodes={nodes}
+            nodes={mappedNodes}
             edges={mappedEdges}
             nodeTypes={nodeTypes}
             edgeTypes={edgeTypes}
@@ -305,7 +319,7 @@ export default function WorkflowPage() {
           )}
         </div>
 
-        {/* ✅ STATUS PANEL */}
+        {/* STATUS PANEL */}
         {showStatus && workflowId && (
           <WorkflowStatusPanel
             events={events}

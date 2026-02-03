@@ -1,10 +1,24 @@
 "use client";
 
 import { EdgeProps, getBezierPath } from "reactflow";
-import { Trash2 } from "lucide-react";
+import { Trash2, CheckCircle } from "lucide-react";
 import { useState } from "react";
 
 import { useWorkflowStore } from "@/store/workflowStore";
+
+/* ================= Types ================= */
+
+type WorkflowStatus = {
+  started: boolean;
+  waiting: boolean;
+  decision: "approve" | "deny" | null;
+  completed: boolean;
+};
+
+type EdgeData = {
+  condition?: "approve" | "deny";
+  workflowStatus?: WorkflowStatus;
+};
 
 /* ================= Condition Picker ================= */
 
@@ -50,7 +64,7 @@ export default function DeletableEdge({
   targetY,
   selected,
   data,
-}: EdgeProps) {
+}: EdgeProps<EdgeData>) {
   const deleteEdge = useWorkflowStore((s) => s.deleteEdge);
   const updateEdgeData = useWorkflowStore((s) => s.updateEdgeData);
 
@@ -64,9 +78,15 @@ export default function DeletableEdge({
   });
 
   const condition = data?.condition;
+  const status = data?.workflowStatus;
 
   const isApprove = condition === "approve";
   const isDeny = condition === "deny";
+
+  const isSelectedPath =
+    status !== undefined &&
+    status.decision !== null &&
+    status.decision === condition;
 
   /* Position offsets */
   const labelOffsetX = -40;
@@ -97,11 +117,11 @@ export default function DeletableEdge({
         <foreignObject
           x={cx + labelOffsetX}
           y={cy - 16}
-          width={80}
+          width={120}
           height={40}
           style={{ overflow: "visible" }}
         >
-          <div className="flex items-center justify-center">
+          <div className="flex items-center gap-1 justify-center">
             {!editing ? (
               <button
                 onClick={() => setEditing(true)}
@@ -125,11 +145,17 @@ export default function DeletableEdge({
                 onClose={() => setEditing(false)}
               />
             )}
+
+            {/* ================= STATUS CHECK ================= */}
+
+            {isSelectedPath && (
+              <CheckCircle size={14} className="text-green-600" />
+            )}
           </div>
         </foreignObject>
       )}
 
-      {/* ================= DELETE (MOVED) ================= */}
+      {/* ================= DELETE ================= */}
 
       {selected && (
         <foreignObject

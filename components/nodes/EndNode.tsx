@@ -1,18 +1,45 @@
 "use client";
 
 import { Handle, Position, NodeProps } from "reactflow";
-import { Square, Trash2, Copy, Settings } from "lucide-react";
+import { Square, Trash2, Copy, Settings, CheckCircle } from "lucide-react";
 
 import { useWorkflowStore } from "@/store/workflowStore";
 
-export default function EndNode({ id, data, selected }: NodeProps) {
+/* ================= Types ================= */
+
+type WorkflowStatus = {
+  started: boolean;
+  waiting: boolean;
+  decision: "approve" | "deny" | null;
+  completed: boolean;
+};
+
+type NodeData = {
+  label?: string;
+  workflowStatus?: WorkflowStatus;
+};
+
+export default function EndNode({ id, data, selected }: NodeProps<NodeData>) {
   const deleteNode = useWorkflowStore((s) => s.deleteNode);
   const duplicateNode = useWorkflowStore((s) => s.duplicateNode);
   const openSettings = useWorkflowStore((s) => s.openSettings);
 
+  const status = data?.workflowStatus;
+
+  const isChecked = status?.completed === true;
+
   return (
     <div className="relative flex items-center min-w-[180px] max-w-[180px] h-[52px] px-3 rounded-md border shadow-sm bg-white">
-      {/* ✅ Action Buttons (Only When Selected) */}
+      {/* ================= STATUS ICON ================= */}
+
+      {isChecked && (
+        <div className="absolute -left-3 top-1/2 -translate-y-1/2 bg-green-500 rounded-full p-0.5">
+          <CheckCircle size={14} className="text-white" />
+        </div>
+      )}
+
+      {/* ================= ACTION BUTTONS ================= */}
+
       {selected && (
         <div className="absolute -right-11 top-1/2 -translate-y-1/2 flex flex-col gap-2 z-50">
           <button
@@ -38,15 +65,18 @@ export default function EndNode({ id, data, selected }: NodeProps) {
         </div>
       )}
 
-      {/* Icon */}
+      {/* ================= ICON ================= */}
+
       <Square size={14} className="text-indigo-700 mr-2" fill="currentColor" />
 
-      {/* Label */}
+      {/* ================= LABEL ================= */}
+
       <span className="text-sm font-semibold truncate">
-        {data.label || "End"}
+        {data?.label || "End"}
       </span>
 
-      {/* Handle */}
+      {/* ================= HANDLE ================= */}
+
       <Handle type="target" position={Position.Top} />
     </div>
   );
