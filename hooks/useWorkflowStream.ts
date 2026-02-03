@@ -6,6 +6,9 @@ export type WorkflowEvent = {
   workflowId: string;
   status: string;
   message?: string;
+  meta?: {
+    to?: string;
+  };
   timestamp: string;
 };
 

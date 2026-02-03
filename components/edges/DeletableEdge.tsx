@@ -151,18 +151,24 @@ export default function DeletableEdge({
             {/* ================= STATUS CHECK ================= */}
 
             {isSelectedPath && (
-              <CheckCircle
-                size={14}
-                className="text-green-600 absolute"
+              <div
+                className="absolute flex items-center justify-center rounded-full bg-green-500 shadow"
                 style={{
+                  width: 18,
+                  height: 18,
+
                   left: isLeftToRight ? "100%" : "auto",
                   right: isLeftToRight ? "auto" : "100%",
+
                   marginLeft: isLeftToRight ? 6 : 0,
                   marginRight: isLeftToRight ? 0 : 6,
+
                   top: "50%",
                   transform: "translateY(-50%)",
                 }}
-              />
+              >
+                <CheckCircle size={12} className="text-white" />
+              </div>
             )}
           </div>
         </foreignObject>

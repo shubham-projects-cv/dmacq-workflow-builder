@@ -19,6 +19,12 @@ type WorkflowEvent = {
   workflowId: string;
   status: string;
   message?: string;
+
+  // ✅ Added
+  meta?: {
+    to?: string;
+  };
+
   timestamp: string;
 };
 
@@ -111,7 +117,10 @@ export default function WorkflowStatusPanel({ events, onClose }: Props) {
         items.push({
           key: `${i}-waiting`,
           title: "Waiting for approval",
-          description: "Approval email sent to approver",
+          description: current.meta?.to
+            ? `Approval email sent to ${current.meta.to}`
+            : "Approval email sent",
+
           time: formatDateTime(current.timestamp),
           duration,
           icon: <AlertCircle size={16} />,
@@ -142,6 +151,19 @@ export default function WorkflowStatusPanel({ events, onClose }: Props) {
           key: `${i}-send-final`,
           title: "Sending result email",
           description: "Notifying workflow owner",
+          time: formatDateTime(current.timestamp),
+          icon: <Mail size={16} />,
+          color: "border-indigo-500 text-indigo-500",
+        });
+      }
+
+      if (current.status === "EMAIL_SENT") {
+        items.push({
+          key: `${i}-email`,
+          title: "Sending email",
+          description: current.meta?.to
+            ? `To: ${current.meta.to}`
+            : "Sending email",
           time: formatDateTime(current.timestamp),
           icon: <Mail size={16} />,
           color: "border-indigo-500 text-indigo-500",
