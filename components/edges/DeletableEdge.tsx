@@ -92,6 +92,8 @@ export default function DeletableEdge({
   const labelOffsetX = -40;
   const deleteOffsetX = condition ? 55 : 12;
 
+  const isLeftToRight = targetX > sourceX;
+
   return (
     <>
       {/* ================= LINE ================= */}
@@ -149,7 +151,18 @@ export default function DeletableEdge({
             {/* ================= STATUS CHECK ================= */}
 
             {isSelectedPath && (
-              <CheckCircle size={14} className="text-green-600" />
+              <CheckCircle
+                size={14}
+                className="text-green-600 absolute"
+                style={{
+                  left: isLeftToRight ? "100%" : "auto",
+                  right: isLeftToRight ? "auto" : "100%",
+                  marginLeft: isLeftToRight ? 6 : 0,
+                  marginRight: isLeftToRight ? 0 : 6,
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                }}
+              />
             )}
           </div>
         </foreignObject>
