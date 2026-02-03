@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useWorkflowStream } from "@/hooks/useWorkflowStream";
 
 import ReactFlow, {
@@ -22,6 +22,7 @@ import DeletableEdge from "@/components/edges/DeletableEdge";
 import WorkflowLayout from "@/components/WorkflowLayout";
 import Sidebar from "@/components/Sidebar";
 import NodeSettings from "@/components/NodeSettings";
+import WorkflowStatusPanel from "@/components/WorkflowStatusPanel";
 
 import { useWorkflowStore } from "@/store/workflowStore";
 
@@ -66,7 +67,19 @@ function ConditionPicker({
 /* ================= Page ================= */
 
 export default function WorkflowPage() {
-  const events = useWorkflowStream();
+  /* ================= Mount Guard (Fix Hydration) ================= */
+
+  /* ================= Mount Guard ================= */
+
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    queueMicrotask(() => {
+      setMounted(true);
+    });
+  }, []);
+
+  /* ================= Store ================= */
 
   const nodes = useWorkflowStore((s) => s.workflow.nodes);
   const edges = useWorkflowStore((s) => s.workflow.edges);
@@ -77,11 +90,16 @@ export default function WorkflowPage() {
   const addStoreEdge = useWorkflowStore((s) => s.addEdge);
   const addNode = useWorkflowStore((s) => s.addNode);
 
-  const selectNode = useWorkflowStore((s) => s.selectNode);
-  const selectEdge = useWorkflowStore((s) => s.selectEdge);
-
-  const closeSettings = useWorkflowStore((s) => s.closeSettings);
   const settingsId = useWorkflowStore((s) => s.settingsNodeId);
+
+  /* ================= Workflow Status ================= */
+
+  const [workflowId, setWorkflowId] = useState<string | null>(null);
+  const [showStatus, setShowStatus] = useState(false);
+
+  const STORAGE_KEY = "active-workflow";
+
+  const events = useWorkflowStream(workflowId || undefined);
 
   /* ================= ReactFlow ================= */
 
@@ -96,7 +114,7 @@ export default function WorkflowPage() {
 
   const [pickerPos, setPickerPos] = useState({ x: 0, y: 0 });
 
-  /* ================= Add Node In Viewport ================= */
+  /* ================= Add Node ================= */
 
   const addNodeInView = useCallback(
     (type: string) => {
@@ -183,7 +201,7 @@ export default function WorkflowPage() {
     [addNode],
   );
 
-  /* ================= Types ================= */
+  /* ================= Node Types ================= */
 
   const nodeTypes = {
     start: StartNode,
@@ -200,6 +218,56 @@ export default function WorkflowPage() {
     ...e,
     type: "deletable",
   }));
+
+  /* ================= Restore On Refresh ================= */
+
+  useEffect(() => {
+    const saved = localStorage.getItem(STORAGE_KEY);
+
+    if (!saved) return;
+
+    queueMicrotask(() => {
+      setWorkflowId(saved);
+      setShowStatus(true);
+    });
+  }, []);
+
+  /* ================= Listen Publish ================= */
+
+  useEffect(() => {
+    const handler = (e: CustomEvent) => {
+      const id = e.detail.workflowId;
+
+      localStorage.setItem(STORAGE_KEY, id);
+
+      setWorkflowId(id);
+      setShowStatus(true);
+    };
+
+    window.addEventListener("workflow-started", handler as EventListener);
+
+    return () => {
+      window.removeEventListener("workflow-started", handler as EventListener);
+    };
+  }, []);
+
+  /* ================= Cleanup On Complete ================= */
+
+  useEffect(() => {
+    if (!events.length) return;
+
+    const last = events[events.length - 1];
+
+    if (last.status === "COMPLETED") {
+      localStorage.removeItem(STORAGE_KEY);
+    }
+  }, [events]);
+
+  /* ================= Prevent SSR Mismatch ================= */
+
+  if (!mounted) return null;
+
+  /* ================= Render ================= */
 
   return (
     <ReactFlowProvider>
@@ -235,17 +303,20 @@ export default function WorkflowPage() {
               onSelect={handleConditionSelect}
             />
           )}
-
-          <div className="absolute bottom-2 right-2 bg-white border p-3 rounded shadow text-xs w-64 max-h-40 overflow-auto">
-            <div className="font-semibold mb-1">Workflow Status</div>
-
-            {events.map((e, i) => (
-              <div key={i}>
-                {e.status} {e.message || ""}
-              </div>
-            ))}
-          </div>
         </div>
+
+        {/* ✅ STATUS PANEL */}
+        {showStatus && workflowId && (
+          <WorkflowStatusPanel
+            events={events}
+            onClose={() => {
+              localStorage.removeItem(STORAGE_KEY);
+
+              setShowStatus(false);
+              setWorkflowId(null);
+            }}
+          />
+        )}
       </WorkflowLayout>
     </ReactFlowProvider>
   );

@@ -21,7 +21,11 @@ export default function TopNavbar() {
       const data = await res.json();
 
       if (data.success) {
-        alert("Workflow Started ✅\nID: " + data.workflowId);
+        window.dispatchEvent(
+          new CustomEvent("workflow-started", {
+            detail: { workflowId: data.workflowId },
+          }),
+        );
       } else {
         alert("Failed ❌: " + data.error);
       }

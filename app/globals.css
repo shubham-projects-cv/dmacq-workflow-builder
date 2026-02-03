@@ -31,3 +31,9 @@ body {
 .react-flow__node {
   overflow: visible !important;
 }
+
+.glow-panel {
+  box-shadow:
+    0 0 0 rgba(99, 102, 241, 0),
+    0 0 12px rgba(99, 102, 241, 0.25);
+}
