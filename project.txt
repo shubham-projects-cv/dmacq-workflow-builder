@@ -78,6 +78,12 @@ body {
   overflow: visible !important;
 }
 
+.glow-panel {
+  box-shadow:
+    0 0 0 rgba(99, 102, 241, 0),
+    0 0 12px rgba(99, 102, 241, 0.25);
+}
+
 ### ./app/layout.tsx
 ----------------
 import type { Metadata } from "next";
@@ -129,7 +135,7 @@ export default function Home() {
 ----------------
 "use client";
 
-import React, { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useWorkflowStream } from "@/hooks/useWorkflowStream";
 
 import ReactFlow, {
@@ -151,6 +157,7 @@ import DeletableEdge from "@/components/edges/DeletableEdge";
 import WorkflowLayout from "@/components/WorkflowLayout";
 import Sidebar from "@/components/Sidebar";
 import NodeSettings from "@/components/NodeSettings";
+import WorkflowStatusPanel from "@/components/WorkflowStatusPanel";
 
 import { useWorkflowStore } from "@/store/workflowStore";
 
@@ -195,7 +202,19 @@ function ConditionPicker({
 /* ================= Page ================= */
 
 export default function WorkflowPage() {
-  const events = useWorkflowStream();
+  /* ================= Mount Guard (Fix Hydration) ================= */
+
+  /* ================= Mount Guard ================= */
+
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    queueMicrotask(() => {
+      setMounted(true);
+    });
+  }, []);
+
+  /* ================= Store ================= */
 
   const nodes = useWorkflowStore((s) => s.workflow.nodes);
   const edges = useWorkflowStore((s) => s.workflow.edges);
@@ -206,11 +225,16 @@ export default function WorkflowPage() {
   const addStoreEdge = useWorkflowStore((s) => s.addEdge);
   const addNode = useWorkflowStore((s) => s.addNode);
 
-  const selectNode = useWorkflowStore((s) => s.selectNode);
-  const selectEdge = useWorkflowStore((s) => s.selectEdge);
-
-  const closeSettings = useWorkflowStore((s) => s.closeSettings);
   const settingsId = useWorkflowStore((s) => s.settingsNodeId);
+
+  /* ================= Workflow Status ================= */
+
+  const [workflowId, setWorkflowId] = useState<string | null>(null);
+  const [showStatus, setShowStatus] = useState(false);
+
+  const STORAGE_KEY = "active-workflow";
+
+  const events = useWorkflowStream(workflowId || undefined);
 
   /* ================= ReactFlow ================= */
 
@@ -225,7 +249,7 @@ export default function WorkflowPage() {
 
   const [pickerPos, setPickerPos] = useState({ x: 0, y: 0 });
 
-  /* ================= Add Node In Viewport ================= */
+  /* ================= Add Node ================= */
 
   const addNodeInView = useCallback(
     (type: string) => {
@@ -312,7 +336,7 @@ export default function WorkflowPage() {
     [addNode],
   );
 
-  /* ================= Types ================= */
+  /* ================= Node Types ================= */
 
   const nodeTypes = {
     start: StartNode,
@@ -329,6 +353,56 @@ export default function WorkflowPage() {
     ...e,
     type: "deletable",
   }));
+
+  /* ================= Restore On Refresh ================= */
+
+  useEffect(() => {
+    const saved = localStorage.getItem(STORAGE_KEY);
+
+    if (!saved) return;
+
+    queueMicrotask(() => {
+      setWorkflowId(saved);
+      setShowStatus(true);
+    });
+  }, []);
+
+  /* ================= Listen Publish ================= */
+
+  useEffect(() => {
+    const handler = (e: CustomEvent) => {
+      const id = e.detail.workflowId;
+
+      localStorage.setItem(STORAGE_KEY, id);
+
+      setWorkflowId(id);
+      setShowStatus(true);
+    };
+
+    window.addEventListener("workflow-started", handler as EventListener);
+
+    return () => {
+      window.removeEventListener("workflow-started", handler as EventListener);
+    };
+  }, []);
+
+  /* ================= Cleanup On Complete ================= */
+
+  useEffect(() => {
+    if (!events.length) return;
+
+    const last = events[events.length - 1];
+
+    if (last.status === "COMPLETED") {
+      localStorage.removeItem(STORAGE_KEY);
+    }
+  }, [events]);
+
+  /* ================= Prevent SSR Mismatch ================= */
+
+  if (!mounted) return null;
+
+  /* ================= Render ================= */
 
   return (
     <ReactFlowProvider>
@@ -364,17 +438,20 @@ export default function WorkflowPage() {
               onSelect={handleConditionSelect}
             />
           )}
-
-          <div className="absolute bottom-2 right-2 bg-white border p-3 rounded shadow text-xs w-64 max-h-40 overflow-auto">
-            <div className="font-semibold mb-1">Workflow Status</div>
-
-            {events.map((e, i) => (
-              <div key={i}>
-                {e.status} {e.message || ""}
-              </div>
-            ))}
-          </div>
         </div>
+
+        {/* ✅ STATUS PANEL */}
+        {showStatus && workflowId && (
+          <WorkflowStatusPanel
+            events={events}
+            onClose={() => {
+              localStorage.removeItem(STORAGE_KEY);
+
+              setShowStatus(false);
+              setWorkflowId(null);
+            }}
+          />
+        )}
       </WorkflowLayout>
     </ReactFlowProvider>
   );
@@ -1112,7 +1189,11 @@ export default function TopNavbar() {
       const data = await res.json();
 
       if (data.success) {
-        alert("Workflow Started ✅\nID: " + data.workflowId);
+        window.dispatchEvent(
+          new CustomEvent("workflow-started", {
+            detail: { workflowId: data.workflowId },
+          }),
+        );
       } else {
         alert("Failed ❌: " + data.error);
       }
@@ -1225,6 +1306,137 @@ export default function WorkflowLayout({
   );
 }
 
+### ./components/WorkflowStatusPanel.tsx
+----------------
+"use client";
+
+import { JSX, useEffect, useRef, useState } from "react";
+import {
+  CheckCircle,
+  X,
+  Clock,
+  AlertCircle,
+  ThumbsUp,
+  ThumbsDown,
+  ChevronUp,
+  ChevronDown,
+} from "lucide-react";
+
+type WorkflowEvent = {
+  workflowId: string;
+  status: string;
+  message?: string;
+  timestamp: string;
+};
+
+type Props = {
+  events: WorkflowEvent[];
+  onClose: () => void;
+};
+
+const STATUS_META: Record<
+  string,
+  { color: string; icon: JSX.Element; label: string }
+> = {
+  STARTED: {
+    color: "border-cyan-400 text-cyan-400",
+    icon: <Clock size={14} />,
+    label: "Workflow started",
+  },
+  WAITING: {
+    color: "border-yellow-400 text-yellow-400",
+    icon: <AlertCircle size={14} />,
+    label: "Waiting for approval",
+  },
+  DECISION_APPROVE: {
+    color: "border-green-500 text-green-500",
+    icon: <ThumbsUp size={14} />,
+    label: "Request approved",
+  },
+  DECISION_DENY: {
+    color: "border-red-500 text-red-500",
+    icon: <ThumbsDown size={14} />,
+    label: "Request denied",
+  },
+  COMPLETED: {
+    color: "border-blue-500 text-blue-500",
+    icon: <CheckCircle size={14} />,
+    label: "Workflow completed",
+  },
+};
+
+export default function WorkflowStatusPanel({ events, onClose }: Props) {
+  const [minimized, setMinimized] = useState(false);
+  const bottomRef = useRef<HTMLDivElement>(null);
+
+  const completed = events.some((e) => e.status === "COMPLETED");
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [events]);
+
+  return (
+    <div
+      className={`
+        fixed top-20 right-4 z-50
+        w-80
+        bg-white border rounded-xl shadow-lg
+        transition-all duration-300
+        ${minimized ? "h-14" : "h-[420px]"}
+        glow-panel
+      `}
+    >
+      {/* HEADER */}
+      <div className="flex items-center justify-between px-4 py-3 border-b">
+        <div className="font-semibold text-sm">Workflow Live Status</div>
+
+        <div className="flex items-center gap-2">
+          <button onClick={() => setMinimized(!minimized)}>
+            {minimized ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+          </button>
+
+          {completed && (
+            <button onClick={onClose}>
+              <X size={16} />
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* BODY */}
+      {!minimized && (
+        <div className="p-3 space-y-3 text-xs overflow-y-auto h-[350px]">
+          {events.map((e, i) => {
+            const key =
+              e.status === "DECISION"
+                ? `DECISION_${e.message?.toUpperCase()}`
+                : e.status;
+
+            const meta = STATUS_META[key];
+
+            if (!meta) return null;
+
+            return (
+              <div key={i} className={`border-l-4 pl-3 ${meta.color}`}>
+                <div className="flex items-center gap-2 font-medium">
+                  {meta.icon}
+                  {meta.label}
+                </div>
+
+                <div className="text-[10px] text-gray-500 mt-0.5">
+                  {new Date(e.timestamp).toLocaleTimeString()}
+                </div>
+              </div>
+            );
+          })}
+
+          <div ref={bottomRef} />
+        </div>
+      )}
+    </div>
+  );
+}
+
 ### ./eslint.config.mjs
 ----------------
 import { defineConfig, globalIgnores } from "eslint/config";
@@ -1259,24 +1471,79 @@ export type WorkflowEvent = {
   timestamp: string;
 };
 
+/* ================= STORAGE ================= */
+
+function getKey(id: string) {
+  return `workflow-events:${id}`;
+}
+
+function load(id: string): WorkflowEvent[] {
+  try {
+    const raw = localStorage.getItem(getKey(id));
+
+    if (!raw) return [];
+
+    return JSON.parse(raw);
+  } catch {
+    return [];
+  }
+}
+
+function save(id: string, events: WorkflowEvent[]) {
+  localStorage.setItem(getKey(id), JSON.stringify(events));
+}
+
 /* ================= HOOK ================= */
 
-export function useWorkflowStream() {
-  const [events, setEvents] = useState<WorkflowEvent[]>([]);
+export function useWorkflowStream(workflowId?: string) {
+  /* ---------- Init From Storage ---------- */
+
+  const [events, setEvents] = useState<WorkflowEvent[]>(() => {
+    if (!workflowId) return [];
+
+    if (typeof window === "undefined") return [];
+
+    return load(workflowId);
+  });
+
+  /* ---------- Reload When Workflow Changes ---------- */
 
   useEffect(() => {
+    if (!workflowId) return;
+
+    const saved = load(workflowId);
+
+    // ✅ Make update async (React 19 safe)
+    queueMicrotask(() => {
+      setEvents(saved);
+    });
+  }, [workflowId]);
+
+  /* ---------- Live Stream ---------- */
+
+  useEffect(() => {
+    if (!workflowId) return;
+
     const es = new EventSource("http://localhost:4000/stream");
 
     es.onmessage = (e) => {
       const data: WorkflowEvent = JSON.parse(e.data);
 
-      setEvents((prev) => [...prev, data]);
+      if (data.workflowId !== workflowId) return;
+
+      setEvents((prev) => {
+        const updated = [...prev, data];
+
+        save(workflowId, updated);
+
+        return updated;
+      });
     };
 
     return () => {
       es.close();
     };
-  }, []);
+  }, [workflowId]);
 
   return events;
 }
