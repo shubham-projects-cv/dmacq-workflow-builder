@@ -1,6 +1,6 @@
 "use client";
 
-import { ReactNode, useEffect, useState } from "react";
+import { ReactNode, useEffect, useRef, useState } from "react";
 import { Plus, RotateCcw } from "lucide-react";
 
 import { useWorkflowStore } from "@/store/workflowStore";
@@ -21,6 +21,10 @@ export default function WorkflowLayout({
 }) {
   const isLeftOpen = useWorkflowStore((s) => s.isLeftOpen);
   const toggleLeft = useWorkflowStore((s) => s.toggleLeft);
+
+  const closeSettings = useWorkflowStore((s) => s.closeSettings);
+
+  const rightPanelRef = useRef<HTMLDivElement>(null);
 
   /* ================= ACTIVE WORKFLOW ================= */
 
@@ -44,6 +48,26 @@ export default function WorkflowLayout({
     };
   }, []);
 
+  /* ================= OUTSIDE CLICK ================= */
+
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      if (!rightPanelRef.current) return;
+
+      if (!rightPanelRef.current.contains(e.target as Node)) {
+        closeSettings();
+      }
+    };
+
+    if (rightPanel) {
+      document.addEventListener("mousedown", handleClick);
+    }
+
+    return () => {
+      document.removeEventListener("mousedown", handleClick);
+    };
+  }, [rightPanel, closeSettings]);
+
   /* ================= CLEAR ================= */
 
   const handleClear = () => {
@@ -53,10 +77,8 @@ export default function WorkflowLayout({
 
   return (
     <div className="w-screen h-screen flex flex-col bg-white overflow-hidden">
-      {/* ================= TOP NAV ================= */}
       <TopNavbar />
 
-      {/* ================= MAIN AREA ================= */}
       <div className="relative flex-1 overflow-hidden">
         {/* ================= SIDEBAR ================= */}
         <div
@@ -85,13 +107,20 @@ export default function WorkflowLayout({
         <div className="w-full h-full relative">{children}</div>
 
         {/* ================= RIGHT PANEL ================= */}
-        {rightPanel && (
-          <div className="absolute right-0 top-0 z-40 w-72 h-full bg-white border-l transition-transform duration-300 translate-x-0">
-            {rightPanel}
-          </div>
-        )}
+        <div
+          ref={rightPanelRef}
+          className={`
+            absolute right-0 top-0 z-40
+            w-72 h-full
+            bg-white border-l
+            transition-transform duration-300
+            ${rightPanel ? "translate-x-0" : "translate-x-full"}
+          `}
+        >
+          {rightPanel}
+        </div>
 
-        {/* ================= NEW WORKFLOW (ALWAYS ACTIVE) ================= */}
+        {/* ================= NEW WORKFLOW ================= */}
         <button
           onClick={handleClear}
           className="
