@@ -1,7 +1,14 @@
 "use client";
 
 import { Handle, Position, NodeProps } from "reactflow";
-import { Square, Trash2, Copy, Settings, CheckCircle } from "lucide-react";
+import {
+  Square,
+  Trash2,
+  Copy,
+  Settings,
+  CheckCircle,
+  XCircle,
+} from "lucide-react";
 
 import { useWorkflowStore } from "@/store/workflowStore";
 
@@ -12,6 +19,8 @@ type WorkflowStatus = {
   waiting: boolean;
   decision: "approve" | "deny" | null;
   completed: boolean;
+  denied: boolean;
+  currentApproverId: string | null;
 };
 
 type NodeData = {
@@ -26,15 +35,22 @@ export default function EndNode({ id, data, selected }: NodeProps<NodeData>) {
 
   const status = data?.workflowStatus;
 
-  const isChecked = status?.completed === true;
+  const completed: boolean = status?.completed === true;
+  const denied: boolean = status?.denied === true;
 
   return (
     <div className="relative flex items-center min-w-[180px] max-w-[180px] h-[52px] px-3 rounded-md border shadow-sm bg-white">
       {/* ================= STATUS ICON ================= */}
 
-      {isChecked && (
+      {completed && !denied && (
         <div className="absolute -left-3 top-1/2 -translate-y-1/2 bg-green-500 rounded-full p-0.5">
           <CheckCircle size={14} className="text-white" />
+        </div>
+      )}
+
+      {denied && (
+        <div className="absolute -left-3 top-1/2 -translate-y-1/2 bg-red-500 rounded-full p-0.5">
+          <XCircle size={14} className="text-white" />
         </div>
       )}
 

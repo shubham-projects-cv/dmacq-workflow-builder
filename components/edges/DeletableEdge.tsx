@@ -13,6 +13,10 @@ type WorkflowStatus = {
   waiting: boolean;
   decision: "approve" | "deny" | null;
   completed: boolean;
+
+  currentEdgeId?: string | null;
+
+  completedEdgeIds?: string[];
 };
 
 type EdgeData = {
@@ -20,7 +24,7 @@ type EdgeData = {
   workflowStatus?: WorkflowStatus;
 };
 
-/* ================= Condition Picker ================= */
+/* ================= Picker ================= */
 
 function EdgeConditionPicker({
   onSelect,
@@ -80,15 +84,26 @@ export default function DeletableEdge({
   const condition = data?.condition;
   const status = data?.workflowStatus;
 
-  const isApprove = condition === "approve";
-  const isDeny = condition === "deny";
+  /* ================= Status ================= */
 
-  const isSelectedPath =
-    status !== undefined &&
-    status.decision !== null &&
-    status.decision === condition;
+  const completedEdges = status?.completedEdgeIds ?? [];
 
-  /* Position offsets */
+  const isCompleted = completedEdges.includes(id);
+
+  /* ================= Colors ================= */
+
+  const strokeColor = isCompleted
+    ? "#22c55e"
+    : condition === "approve"
+      ? "#22c55e"
+      : condition === "deny"
+        ? "#ef4444"
+        : selected
+          ? "#6366f1"
+          : "#94a3b8";
+
+  /* ================= Position ================= */
+
   const labelOffsetX = -40;
   const deleteOffsetX = condition ? 55 : 12;
 
@@ -98,22 +113,9 @@ export default function DeletableEdge({
     <>
       {/* ================= LINE ================= */}
 
-      <path
-        d={path}
-        stroke={
-          isApprove
-            ? "#22c55e"
-            : isDeny
-              ? "#ef4444"
-              : selected
-                ? "#6366f1"
-                : "#94a3b8"
-        }
-        strokeWidth={2}
-        fill="none"
-      />
+      <path d={path} stroke={strokeColor} strokeWidth={2} fill="none" />
 
-      {/* ================= CONDITION LABEL ================= */}
+      {/* ================= LABEL ================= */}
 
       {condition && (
         <foreignObject
@@ -123,19 +125,19 @@ export default function DeletableEdge({
           height={40}
           style={{ overflow: "visible" }}
         >
-          <div className="flex items-center gap-1 justify-center">
+          <div className="flex items-center gap-1 justify-center relative">
             {!editing ? (
               <button
                 onClick={() => setEditing(true)}
                 className={`px-3 py-1 rounded-full text-xs font-medium shadow
                   ${
-                    isApprove
+                    condition === "approve"
                       ? "bg-green-500 text-white"
                       : "bg-red-500 text-white"
                   }
                 `}
               >
-                {isApprove ? "Approve" : "Deny"}
+                {condition === "approve" ? "Approve" : "Deny"}
               </button>
             ) : (
               <EdgeConditionPicker
@@ -148,9 +150,9 @@ export default function DeletableEdge({
               />
             )}
 
-            {/* ================= STATUS CHECK ================= */}
+            {/* ================= CHECK ================= */}
 
-            {isSelectedPath && (
+            {isCompleted && (
               <div
                 className="absolute flex items-center justify-center rounded-full bg-green-500 shadow"
                 style={{

@@ -19,12 +19,11 @@ type WorkflowEvent = {
   workflowId: string;
   status: string;
   message?: string;
-
-  // ✅ Added
   meta?: {
     to?: string;
+    approverId?: string;
+    level?: number;
   };
-
   timestamp: string;
 };
 
@@ -79,7 +78,7 @@ export default function WorkflowStatusPanel({ events, onClose }: Props) {
 
   const completed = events.some((e) => e.status === "COMPLETED");
 
-  /* ================= Build Timeline ================= */
+  /* ================= Timeline ================= */
 
   const timeline = useMemo<TimelineItem[]>(() => {
     if (!events.length) return [];
@@ -98,7 +97,7 @@ export default function WorkflowStatusPanel({ events, onClose }: Props) {
           ? formatDuration(currentTime - prevTime)
           : undefined;
 
-      /* ---------- START ---------- */
+      /* START */
 
       if (current.status === "STARTED") {
         items.push({
@@ -111,15 +110,15 @@ export default function WorkflowStatusPanel({ events, onClose }: Props) {
         });
       }
 
-      /* ---------- WAITING ---------- */
+      /* WAITING */
 
       if (current.status === "WAITING") {
         items.push({
           key: `${i}-waiting`,
           title: "Waiting for approval",
           description: current.meta?.to
-            ? `Approval email sent to ${current.meta.to}`
-            : "Approval email sent",
+            ? `Waiting for ${current.meta.to}`
+            : "Waiting for approval",
 
           time: formatDateTime(current.timestamp),
           duration,
@@ -128,17 +127,15 @@ export default function WorkflowStatusPanel({ events, onClose }: Props) {
         });
       }
 
-      /* ---------- DECISION ---------- */
+      /* DECISION */
 
       if (current.status === "DECISION") {
         const approved = current.message === "approve";
 
         items.push({
           key: `${i}-decision`,
-          title: approved ? "Request approved" : "Request denied",
-          description: approved
-            ? "Approver accepted the request"
-            : "Approver rejected the request",
+          title: approved ? "Approved" : "Denied",
+          description: approved ? "Request approved" : "Request denied",
           time: formatDateTime(current.timestamp),
           duration,
           icon: approved ? <ThumbsUp size={16} /> : <ThumbsDown size={16} />,
@@ -146,16 +143,9 @@ export default function WorkflowStatusPanel({ events, onClose }: Props) {
             ? "border-green-500 text-green-500"
             : "border-red-500 text-red-500",
         });
-
-        items.push({
-          key: `${i}-send-final`,
-          title: "Sending result email",
-          description: "Notifying workflow owner",
-          time: formatDateTime(current.timestamp),
-          icon: <Mail size={16} />,
-          color: "border-indigo-500 text-indigo-500",
-        });
       }
+
+      /* EMAIL */
 
       if (current.status === "EMAIL_SENT") {
         items.push({
@@ -170,7 +160,7 @@ export default function WorkflowStatusPanel({ events, onClose }: Props) {
         });
       }
 
-      /* ---------- COMPLETED ---------- */
+      /* COMPLETED */
 
       if (current.status === "COMPLETED") {
         const start = new Date(events[0].timestamp).getTime();
@@ -190,7 +180,7 @@ export default function WorkflowStatusPanel({ events, onClose }: Props) {
     return items;
   }, [events]);
 
-  /* ================= Auto Scroll ================= */
+  /* ================= Scroll ================= */
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -209,7 +199,7 @@ export default function WorkflowStatusPanel({ events, onClose }: Props) {
         glow-panel
       `}
     >
-      {/* ================= HEADER ================= */}
+      {/* HEADER */}
 
       <div className="flex items-center justify-between px-4 py-3 border-b">
         <div className="font-semibold text-base">Workflow Activity</div>
@@ -227,7 +217,7 @@ export default function WorkflowStatusPanel({ events, onClose }: Props) {
         </div>
       </div>
 
-      {/* ================= BODY ================= */}
+      {/* BODY */}
 
       {!minimized && (
         <div className="p-3 space-y-3 text-sm overflow-y-auto h-[400px]">

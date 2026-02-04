@@ -20,6 +20,9 @@ type WorkflowStatus = {
   waiting: boolean;
   decision: "approve" | "deny" | null;
   completed: boolean;
+
+  currentApproverId: string | null;
+  completedApproverIds: string[];
 };
 
 type NodeData = {
@@ -39,20 +42,21 @@ export default function ApprovalNode({
 
   const status = data?.workflowStatus;
 
-  const isWaiting =
-    status !== undefined && status.waiting === true && status.decision === null;
+  /* ================= Status ================= */
 
-  const isChecked = status?.decision !== null;
+  const isActive = status?.waiting === true && status?.currentApproverId === id;
+
+  const isChecked = status?.completedApproverIds?.includes(id) === true;
 
   return (
     <div
       className={`
         relative flex min-w-[210px] max-w-[210px] h-[70px]
         rounded-lg border shadow-sm bg-white
-        ${isWaiting ? "ring-2 ring-yellow-400 animate-pulse" : ""}
+        ${isActive ? "ring-2 ring-indigo-500 animate-pulse" : ""}
       `}
     >
-      {/* ================= STATUS ICON ================= */}
+      {/* ================= CHECK ================= */}
 
       {isChecked && (
         <div className="absolute -left-3 top-1/2 -translate-y-1/2 bg-green-500 rounded-full p-0.5">
@@ -60,7 +64,7 @@ export default function ApprovalNode({
         </div>
       )}
 
-      {/* ================= ACTION BUTTONS ================= */}
+      {/* ================= ACTIONS ================= */}
 
       {selected && (
         <div className="absolute -right-12 top-1/2 -translate-y-1/2 flex flex-col gap-2 z-50">
@@ -110,7 +114,6 @@ export default function ApprovalNode({
               <button
                 onClick={() => openSettings(id)}
                 className="text-blue-600 hover:text-blue-800 ml-auto"
-                title="Add Email"
               >
                 <Plus size={12} />
               </button>
@@ -126,7 +129,6 @@ export default function ApprovalNode({
               <button
                 onClick={() => openSettings(id)}
                 className="text-blue-600 hover:text-blue-800 ml-auto shrink-0"
-                title="Edit Email"
               >
                 <Pencil size={12} />
               </button>

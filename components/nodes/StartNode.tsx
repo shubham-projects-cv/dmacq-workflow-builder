@@ -12,6 +12,8 @@ type WorkflowStatus = {
   waiting: boolean;
   decision: "approve" | "deny" | null;
   completed: boolean;
+  denied: boolean;
+  currentApproverId: string | null;
 };
 
 type NodeData = {
@@ -27,13 +29,13 @@ export default function StartNode({ id, data, selected }: NodeProps<NodeData>) {
 
   const status = data?.workflowStatus;
 
-  const isChecked = status?.started === true;
+  const started: boolean = status?.started === true;
 
   return (
     <div className="relative flex min-w-[180px] max-w-[180px] h-[52px] rounded-lg border shadow-sm bg-white">
       {/* ================= STATUS ICON ================= */}
 
-      {isChecked && (
+      {started && (
         <div className="absolute -left-3 top-1/2 -translate-y-1/2 bg-green-500 rounded-full p-0.5">
           <CheckCircle size={14} className="text-white" />
         </div>
@@ -76,7 +78,9 @@ export default function StartNode({ id, data, selected }: NodeProps<NodeData>) {
 
       <div className="p-2 flex-1">
         <div className="text-[11px] text-gray-500">{data?.subLabel}</div>
-        <div className="text-sm font-semibold truncate">{data?.label}</div>
+        <div className="text-sm font-semibold truncate">
+          {data?.label || "Start"}
+        </div>
       </div>
 
       {/* ================= HANDLE ================= */}

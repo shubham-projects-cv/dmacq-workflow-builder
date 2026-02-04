@@ -26,6 +26,11 @@ import WorkflowStatusPanel from "@/components/WorkflowStatusPanel";
 
 import { useWorkflowStore } from "@/store/workflowStore";
 
+/* ================= Storage ================= */
+
+const WORKFLOW_KEY = "active-workflow";
+const PANEL_KEY = "workflow-panel-closed";
+
 /* ================= Condition Picker ================= */
 
 function ConditionPicker({
@@ -67,14 +72,10 @@ function ConditionPicker({
 /* ================= Page ================= */
 
 export default function WorkflowPage() {
-  /* ================= Mount Guard ================= */
-
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    queueMicrotask(() => {
-      setMounted(true);
-    });
+    queueMicrotask(() => setMounted(true));
   }, []);
 
   /* ================= Store ================= */
@@ -90,12 +91,10 @@ export default function WorkflowPage() {
 
   const settingsId = useWorkflowStore((s) => s.settingsNodeId);
 
-  /* ================= Workflow Status ================= */
+  /* ================= Status ================= */
 
   const [workflowId, setWorkflowId] = useState<string | null>(null);
   const [showStatus, setShowStatus] = useState(false);
-
-  const STORAGE_KEY = "active-workflow";
 
   const { events, status } = useWorkflowStream(workflowId || undefined);
 
@@ -199,7 +198,7 @@ export default function WorkflowPage() {
     [addNode],
   );
 
-  /* ================= Node / Edge Types ================= */
+  /* ================= Node / Edge ================= */
 
   const nodeTypes = {
     start: StartNode,
@@ -212,7 +211,7 @@ export default function WorkflowPage() {
     deletable: DeletableEdge,
   };
 
-  /* ================= Inject Status Into Nodes ================= */
+  /* ================= Inject Status ================= */
 
   const mappedNodes = useMemo(() => {
     return nodes.map((n) => ({
@@ -223,8 +222,6 @@ export default function WorkflowPage() {
       },
     }));
   }, [nodes, status]);
-
-  /* ================= Inject Status Into Edges ================= */
 
   const mappedEdges = useMemo(() => {
     return edges.map((e) => ({
@@ -237,16 +234,20 @@ export default function WorkflowPage() {
     }));
   }, [edges, status]);
 
-  /* ================= Restore On Refresh ================= */
+  /* ================= Restore ================= */
 
   useEffect(() => {
-    const saved = localStorage.getItem(STORAGE_KEY);
+    const saved = localStorage.getItem(WORKFLOW_KEY);
+    const closed = localStorage.getItem(PANEL_KEY);
 
     if (!saved) return;
 
     queueMicrotask(() => {
       setWorkflowId(saved);
-      setShowStatus(true);
+
+      if (!closed) {
+        setShowStatus(true);
+      }
     });
   }, []);
 
@@ -256,7 +257,8 @@ export default function WorkflowPage() {
     const handler = (e: CustomEvent<{ workflowId: string }>) => {
       const id = e.detail.workflowId;
 
-      localStorage.setItem(STORAGE_KEY, id);
+      localStorage.setItem(WORKFLOW_KEY, id);
+      localStorage.removeItem(PANEL_KEY);
 
       setWorkflowId(id);
       setShowStatus(true);
@@ -269,15 +271,14 @@ export default function WorkflowPage() {
     };
   }, []);
 
-  /* ================= Cleanup On Complete ================= */
+  /* ================= Cleanup ================= */
 
   useEffect(() => {
     if (!status.completed) return;
 
-    localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(WORKFLOW_KEY);
+    localStorage.removeItem(PANEL_KEY);
   }, [status.completed]);
-
-  /* ================= Prevent SSR Mismatch ================= */
 
   if (!mounted) return null;
 
@@ -319,15 +320,13 @@ export default function WorkflowPage() {
           )}
         </div>
 
-        {/* STATUS PANEL */}
         {showStatus && workflowId && (
           <WorkflowStatusPanel
             events={events}
             onClose={() => {
-              localStorage.removeItem(STORAGE_KEY);
+              localStorage.setItem(PANEL_KEY, "1");
 
               setShowStatus(false);
-              setWorkflowId(null);
             }}
           />
         )}

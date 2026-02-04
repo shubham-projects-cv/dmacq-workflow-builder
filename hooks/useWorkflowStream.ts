@@ -8,6 +8,12 @@ export type WorkflowEvent = {
   message?: string;
   meta?: {
     to?: string;
+
+    currentApproverId?: string | null;
+    currentEdgeId?: string | null;
+
+    completedApproverIds?: string[];
+    completedEdgeIds?: string[];
   };
   timestamp: string;
 };
@@ -17,6 +23,12 @@ export type WorkflowStatusState = {
   waiting: boolean;
   decision: "approve" | "deny" | null;
   completed: boolean;
+
+  currentApproverId: string | null;
+  currentEdgeId: string | null;
+
+  completedApproverIds: string[];
+  completedEdgeIds: string[];
 };
 
 /* ================= STORAGE ================= */
@@ -28,9 +40,7 @@ function getKey(id: string): string {
 function load(id: string): WorkflowEvent[] {
   try {
     const raw = localStorage.getItem(getKey(id));
-
     if (!raw) return [];
-
     return JSON.parse(raw) as WorkflowEvent[];
   } catch {
     return [];
@@ -41,13 +51,20 @@ function save(id: string, events: WorkflowEvent[]): void {
   localStorage.setItem(getKey(id), JSON.stringify(events));
 }
 
-/* ================= STATUS DERIVER ================= */
+/* ================= STATUS ================= */
 
 function deriveStatus(events: WorkflowEvent[]): WorkflowStatusState {
   let started = false;
   let waiting = false;
   let completed = false;
+
   let decision: "approve" | "deny" | null = null;
+
+  let currentApproverId: string | null = null;
+  let currentEdgeId: string | null = null;
+
+  let completedApproverIds: string[] = [];
+  let completedEdgeIds: string[] = [];
 
   for (const e of events) {
     if (e.status === "STARTED") {
@@ -56,16 +73,38 @@ function deriveStatus(events: WorkflowEvent[]): WorkflowStatusState {
 
     if (e.status === "WAITING") {
       waiting = true;
+
+      currentApproverId = e.meta?.currentApproverId ?? null;
+      currentEdgeId = e.meta?.currentEdgeId ?? null;
     }
 
     if (e.status === "DECISION") {
+      waiting = false;
+
       if (e.message === "approve" || e.message === "deny") {
         decision = e.message;
       }
+
+      currentApproverId = null;
+      currentEdgeId = e.meta?.currentEdgeId ?? null;
     }
 
     if (e.status === "COMPLETED") {
       completed = true;
+      waiting = false;
+
+      currentApproverId = null;
+      currentEdgeId = null;
+    }
+
+    /* ---------- META SYNC ---------- */
+
+    if (Array.isArray(e.meta?.completedApproverIds)) {
+      completedApproverIds = e.meta.completedApproverIds;
+    }
+
+    if (Array.isArray(e.meta?.completedEdgeIds)) {
+      completedEdgeIds = e.meta.completedEdgeIds;
     }
   }
 
@@ -74,35 +113,48 @@ function deriveStatus(events: WorkflowEvent[]): WorkflowStatusState {
     waiting,
     decision,
     completed,
+
+    currentApproverId,
+    currentEdgeId,
+
+    completedApproverIds,
+    completedEdgeIds,
   };
 }
 
 /* ================= HOOK ================= */
 
 export function useWorkflowStream(workflowId?: string) {
-  /* ---------- Init ---------- */
-
   const [events, setEvents] = useState<WorkflowEvent[]>(() => {
     if (!workflowId) return [];
-
     if (typeof window === "undefined") return [];
 
     return load(workflowId);
   });
 
-  /* ---------- Reload When ID Changes ---------- */
+  /* ================= Reload ================= */
 
   useEffect(() => {
     if (!workflowId) return;
 
     const saved = load(workflowId);
 
+    if (saved.some((e) => e.status === "COMPLETED")) {
+      localStorage.removeItem(getKey(workflowId));
+
+      queueMicrotask(() => {
+        setEvents([]);
+      });
+
+      return;
+    }
+
     queueMicrotask(() => {
       setEvents(saved);
     });
   }, [workflowId]);
 
-  /* ---------- Live Stream ---------- */
+  /* ================= Stream ================= */
 
   useEffect(() => {
     if (!workflowId) return;
@@ -117,7 +169,6 @@ export function useWorkflowStream(workflowId?: string) {
       setEvents((prev) => {
         const updated = [...prev, data];
 
-        // Clear storage when completed
         if (data.status === "COMPLETED") {
           localStorage.removeItem(getKey(workflowId));
         } else {
@@ -128,12 +179,10 @@ export function useWorkflowStream(workflowId?: string) {
       });
     };
 
-    return () => {
-      es.close();
-    };
+    return () => es.close();
   }, [workflowId]);
 
-  /* ---------- Derived Status (No State) ---------- */
+  /* ================= Derived ================= */
 
   const status = useMemo<WorkflowStatusState>(() => {
     return deriveStatus(events);
