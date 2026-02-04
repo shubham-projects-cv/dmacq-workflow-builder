@@ -159,7 +159,9 @@ export function useWorkflowStream(workflowId?: string) {
   useEffect(() => {
     if (!workflowId) return;
 
-    const es = new EventSource("http://localhost:4000/stream");
+    const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+
+    const es = new EventSource(`${API}/stream`);
 
     es.onmessage = (e: MessageEvent<string>) => {
       const data = JSON.parse(e.data) as WorkflowEvent;

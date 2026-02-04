@@ -53,7 +53,10 @@ export default function WorkflowLayout({
 
         {/* ================= RIGHT PANEL ================= */}
         {rightPanel && (
-          <div className="absolute top-0 right-0 h-full w-72 bg-white text-gray-900 z-40 border-l">
+          // <div className="absolute top-0 right-0 h-full w-72 bg-white text-gray-900 z-40 border-l">
+          //   {rightPanel}
+          // </div>
+          <div className="absolute right-0 top-0 z-40 w-72 h-full bg-white border-l transition-transform duration-300 translate-x-0">
             {rightPanel}
           </div>
         )}
