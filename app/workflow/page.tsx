@@ -280,6 +280,21 @@ export default function WorkflowPage() {
     localStorage.removeItem(PANEL_KEY);
   }, [status.completed]);
 
+  useEffect(() => {
+    if (!reactFlowInstance.current) return;
+
+    if (nodes.length === 0) return;
+
+    setTimeout(() => {
+      reactFlowInstance.current?.fitView({
+        padding: 0.2,
+        minZoom: 0.6,
+        maxZoom: 1,
+        duration: 400,
+      });
+    }, 100);
+  }, [nodes, edges]);
+
   if (!mounted) return null;
 
   /* ================= Render ================= */

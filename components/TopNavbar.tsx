@@ -1,13 +1,43 @@
 "use client";
 
 import { Undo2, Redo2, Save, Send } from "lucide-react";
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useWorkflowStore } from "@/store/workflowStore";
 
 type NodeType = "start" | "approval" | "email" | "end";
 
+/* ================= STORAGE ================= */
+
+const WORKFLOW_KEY = "active-workflow";
+
 export default function TopNavbar() {
   const workflow = useWorkflowStore((s) => s.workflow);
+
+  /* ================= ACTIVE STATE ================= */
+
+  const [hasActiveWorkflow, setHasActiveWorkflow] = useState(false);
+
+  /* ================= SYNC LOCALSTORAGE ================= */
+
+  useEffect(() => {
+    const check = () => {
+      setHasActiveWorkflow(!!localStorage.getItem(WORKFLOW_KEY));
+    };
+
+    check();
+
+    window.addEventListener("storage", check);
+
+    window.addEventListener("workflow-started", check as EventListener);
+
+    window.addEventListener("workflow-completed", check as EventListener);
+
+    return () => {
+      window.removeEventListener("storage", check);
+      window.removeEventListener("workflow-started", check as EventListener);
+      window.removeEventListener("workflow-completed", check as EventListener);
+    };
+  }, []);
 
   /* ================= VALIDATION ================= */
 
@@ -25,8 +55,6 @@ export default function TopNavbar() {
       outgoing.set(n.id, 0);
     }
 
-    /* ---------- Validate Edges ---------- */
-
     for (const e of edges) {
       if (!nodeMap.has(e.source)) return false;
       if (!nodeMap.has(e.target)) return false;
@@ -35,31 +63,23 @@ export default function TopNavbar() {
       outgoing.set(e.source, (outgoing.get(e.source) ?? 0) + 1);
     }
 
-    /* ---------- Validate Nodes ---------- */
-
     for (const node of nodes) {
       const type = node.type as NodeType;
 
       const inCount = incoming.get(node.id) ?? 0;
       const outCount = outgoing.get(node.id) ?? 0;
 
-      /* Start → must have output */
       if (type === "start" && outCount === 0) return false;
-
-      /* End → must have input */
       if (type === "end" && inCount === 0) return false;
 
-      /* Middle nodes → must have both */
       if (type !== "start" && type !== "end") {
         if (inCount === 0 || outCount === 0) return false;
       }
 
-      /* Email node → must have email */
       if (type === "email") {
         if (!node.data?.email) return false;
       }
 
-      /* Approval node → must have email + both paths */
       if (type === "approval") {
         if (!node.data?.email) return false;
 
@@ -82,6 +102,9 @@ export default function TopNavbar() {
 
   const handlePublish = async () => {
     if (!isWorkflowValid) return;
+
+    if (hasActiveWorkflow) return;
+
     const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
 
     try {
@@ -98,6 +121,10 @@ export default function TopNavbar() {
       const data = await res.json();
 
       if (data.success) {
+        localStorage.setItem(WORKFLOW_KEY, data.workflowId);
+
+        setHasActiveWorkflow(true);
+
         window.dispatchEvent(
           new CustomEvent("workflow-started", {
             detail: { workflowId: data.workflowId },
@@ -113,6 +140,8 @@ export default function TopNavbar() {
   };
 
   /* ================= UI ================= */
+
+  const disablePublish = !isWorkflowValid || hasActiveWorkflow;
 
   return (
     <div className="w-full bg-white border-b shadow-sm px-3 py-2">
@@ -140,19 +169,17 @@ export default function TopNavbar() {
           {/* PUBLISH */}
           <button
             onClick={handlePublish}
-            disabled={!isWorkflowValid}
+            disabled={disablePublish}
             className={`
               flex items-center gap-1 px-3 py-1.5 rounded text-sm
               ${
-                isWorkflowValid
+                !disablePublish
                   ? "bg-indigo-600 text-white hover:bg-indigo-700"
                   : "bg-gray-300 text-gray-500 cursor-not-allowed"
               }
             `}
             title={
-              isWorkflowValid
-                ? "Publish Workflow"
-                : "Complete all connections and required fields"
+              hasActiveWorkflow ? "Workflow is running" : "Publish Workflow"
             }
           >
             <Send size={16} />
